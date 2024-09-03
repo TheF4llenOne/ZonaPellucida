@@ -20,11 +20,23 @@ Key features of the architecture:
 - Loss Function: Typically a pixel-wise cross-entropy loss.
 - Optimizer: Common choices include Adam or SGD with momentum.
 
+### Overfitting Issues
+
+Due to the limited size of the dataset, the model faces overfitting issues. The dataset consists of 205 images with corresponding masks, sourced from two videos:
+
+- 105 images from a video of one embryo
+- 100 images from a video of another embryo
+
+The relatively small size and limited diversity of the dataset contribute to the model's tendency to overfit. Some solutions are provided in the Future work section.
+
 ### Future Work
 
+- Collecting a larger and more diverse dataset to improve the model's robustness and generalization capabilities.
 - Additional Labels: The model will be extended to segment additional structures within the oocyte, requiring the use of multi-class segmentation techniques.
-- Model Improvements: Exploring advanced architectures like U-Net or DeepLab for improved performance.
+- Model Improvements: Exploring advanced architectures like DeepLab for improved performance.
 - Data Augmentation: Implementing advanced augmentation techniques to increase dataset variability.
+- Regularization: Use techniques like dropout and L2 regularization to reduce overfitting.
+- Cross-Validation: Implement cross-validation to better evaluate model performance and generalizability.
 
 ### Dataset
 
