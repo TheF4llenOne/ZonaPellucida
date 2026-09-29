@@ -46,9 +46,10 @@ train:
   batch_size: 16
   epochs: 100
   learning_rate: 0.001
-  # false = the same (random) batch order in every epoch, as in the thesis.
   # true = reshuffled every epoch, reproducibly from the seed.
-  shuffle: false
+  # false = the same (random) batch order in every epoch, as in the first
+  # thesis version.
+  shuffle: true
   # The weights of the epoch with the best validation value of `monitor` are
   # kept. Foreground IoU does not depend on the loss, so the weighted and
   # unweighted runs are selected by the same criterion.

@@ -71,7 +71,7 @@ OUTPUT_DIR = DRIVE_DIR + '/ZonaPellucida_outputs/' + FRAMEWORK  # figures, table
 
 SIZE = 512  # images and masks are resized to SIZE x SIZE
 EPOCHS = 100  # all epochs are trained; the best validation-IoU epoch is kept
-SHUFFLE = False  # see "Shuffling" in the training section
+SHUFFLE = True  # reshuffle the training images every epoch (see "Shuffling")
 CLASS_WEIGHTING = 'inverse_frequency'  # or 'median_frequency'
 FIGURE_RUN = 'weighted'  # model shown in the qualitative figures
 USE_VAL_THRESHOLD = False  # figures at 0.5 (False) or at the val-selected threshold
@@ -148,7 +148,7 @@ class TrainConfig:
     batch_size: int = 16
     epochs: int = 100
     learning_rate: float = 0.001
-    shuffle: bool = False
+    shuffle: bool = True
     monitor: str = "val_iou"
     mode: str = "max"
     early_stopping: EarlyStoppingConfig = field(

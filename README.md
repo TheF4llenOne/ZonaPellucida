@@ -39,7 +39,7 @@ tests/                    # pytest on synthetic data: shared, pytorch/, keras/
 
 ### Running
 
-**Colab:** put the data in `MyDrive/images` and `MyDrive/masks`, and the code in `MyDrive/ZonaPellucida`: either copy the repository folder there, or let the notebook clone it (this needs the branch named in `REPO_BRANCH` pushed to GitHub, with the `zona_pellucida` package committed). Open `fcn.ipynb`, choose `FRAMEWORK` in the first cell and run it from the top. PyTorch and TensorFlow are preinstalled on Colab; the notebook installs PyTorch Lightning and torchmetrics. Settings are in the first cell (`SEED`, paths, `SHUFFLE`, `CLASS_WEIGHTING`, ...); everything else is in `configs/config.yaml` and can be overridden with `CONFIG_OVERRIDES`. Results go to `MyDrive/ZonaPellucida_outputs/<framework>`, outside the code folder. Restart the runtime after changing `FRAMEWORK`.
+**Colab:** put the data in `MyDrive/images` and `MyDrive/masks`, and the code in `MyDrive/ZonaPellucida`: either copy the repository folder there, or let the notebook clone it from GitHub. Open `fcn.ipynb`, choose `FRAMEWORK` in the first cell and run it from the top. PyTorch and TensorFlow are preinstalled on Colab; the notebook installs PyTorch Lightning and torchmetrics. Settings are in the first cell (`SEED`, paths, `SHUFFLE`, `CLASS_WEIGHTING`, ...); everything else is in `configs/config.yaml` and can be overridden with `CONFIG_OVERRIDES`. Results go to `MyDrive/ZonaPellucida_outputs/<framework>`, outside the code folder. Restart the runtime after changing `FRAMEWORK`.
 
 **Locally:** copy `zona_pellucida/configs/config.yaml` to `my_config.yaml` and set `framework`, `data.image_dir`, `data.mask_dir` and `output_dir` (the defaults are the Colab Drive paths), then
 

@@ -60,7 +60,7 @@ class TrainConfig:
     batch_size: int = 16
     epochs: int = 100
     learning_rate: float = 0.001
-    shuffle: bool = False
+    shuffle: bool = True
     monitor: str = "val_iou"
     mode: str = "max"
     early_stopping: EarlyStoppingConfig = field(

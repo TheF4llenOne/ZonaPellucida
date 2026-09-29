@@ -4,6 +4,7 @@
 
 - PyTorch Lightning implementation (`zona_pellucida/backends/pytorch`) next to the Keras one, behind a common backend interface; `FRAMEWORK` switch in the notebook, `framework` in the config, one single-file export per framework. The PyTorch network is tested to give the same output as the Keras model with the same weights.
 - Per-framework output folders, a `framework` column in the results, and the git commit of the code in every environment report.
+- The training images are reshuffled every epoch by default (`train.shuffle: true`, reproducible from the seed).
 
 ## 0.2.0 (changes since the thesis notebook)
 
