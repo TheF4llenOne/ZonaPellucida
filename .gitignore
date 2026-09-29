@@ -6,6 +6,10 @@ __pycache__/
 .ipynb_checkpoints/
 uv.lock
 
+# Local run configs (machine-specific paths)
+my_config.yaml
+*.local.yaml
+
 # Run artefacts (models, logs, figures, csv) are regenerated from the notebook
 outputs/
 *.keras

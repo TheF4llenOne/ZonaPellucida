@@ -1,6 +1,7 @@
 # Configuration of the zona pellucida FCN experiments.
-# Every value here can be overridden from the notebook via
-# `load_config(overrides={...})`.
+# The command-line runner reads a copy of this file. The notebook sets some
+# values in its first cell and can override the others through
+# CONFIG_OVERRIDES (except experiments.runs: it always trains both runs).
 
 # Deep-learning framework: pytorch (PyTorch Lightning) or keras
 # (TensorFlow/Keras, as used for the thesis). Everything else is shared.
@@ -87,6 +88,7 @@ evaluation:
 experiments:
   # unweighted = binary cross-entropy (thesis baseline)
   # weighted   = frequency-weighted binary cross-entropy
+  # (command-line runner only; the notebook always trains both)
   runs: [unweighted, weighted]
   # Run used for the qualitative figures (predictions, confusion matrix...).
   figure_run: weighted

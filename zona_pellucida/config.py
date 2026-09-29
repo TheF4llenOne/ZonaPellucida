@@ -130,6 +130,19 @@ def merge_dicts(base, overrides):
     return merged
 
 
+def overlapping_keys(base, overrides, prefix=""):
+    """Dotted keys that are set in both nested dicts."""
+    keys = []
+    for key, value in overrides.items():
+        if key not in base:
+            continue
+        if isinstance(value, dict) and isinstance(base[key], dict):
+            keys += overlapping_keys(base[key], value, f"{prefix}{key}.")
+        else:
+            keys.append(f"{prefix}{key}")
+    return keys
+
+
 def _build(cls, values, path="config"):
     """Build dataclass `cls` from a dict, rejecting unknown keys."""
     hints = typing.get_type_hints(cls)

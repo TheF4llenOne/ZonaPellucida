@@ -39,9 +39,9 @@ tests/                    # pytest on synthetic data: shared, pytorch/, keras/
 
 ### Running
 
-**Colab:** put the data in `MyDrive/images` and `MyDrive/masks`, and the code in `MyDrive/ZonaPellucida`: either copy the repository folder there, or let the notebook clone it from GitHub. Open `fcn.ipynb`, choose `FRAMEWORK` in the first cell and run it from the top. PyTorch and TensorFlow are preinstalled on Colab; the notebook installs PyTorch Lightning and torchmetrics. Settings are in the first cell (`SEED`, paths, `SHUFFLE`, `CLASS_WEIGHTING`, ...); everything else is in `configs/config.yaml` and can be overridden with `CONFIG_OVERRIDES`. Results go to `MyDrive/ZonaPellucida_outputs/<framework>`, outside the code folder. Restart the runtime after changing `FRAMEWORK`.
+**Colab:** put the data in `MyDrive/images` and `MyDrive/masks`, and the code in `MyDrive/ZonaPellucida`: either copy a git clone of the repository there (with its hidden `.git` folder, so the environment reports can record the code version; a ZIP download has none), or let the notebook clone it from GitHub. Open `fcn.ipynb`, choose `FRAMEWORK` in the first cell and run it from the top. PyTorch and TensorFlow are preinstalled on Colab; the notebook installs PyTorch Lightning and torchmetrics. Settings are in the first cell (`SEED`, paths, `SHUFFLE`, `CLASS_WEIGHTING`, ...); everything else is in `configs/config.yaml` and can be overridden with `CONFIG_OVERRIDES` (settings of the first cell are changed there; `experiments.runs` is fixed: the notebook always trains both runs). Results go to `MyDrive/ZonaPellucida_outputs/<framework>`, outside the code folder. Restart the runtime after changing `FRAMEWORK`.
 
-**Locally:** copy `zona_pellucida/configs/config.yaml` to `my_config.yaml` and set `framework`, `data.image_dir`, `data.mask_dir` and `output_dir` (the defaults are the Colab Drive paths), then
+**Locally:** copy `zona_pellucida/configs/config.yaml` to `my_config.yaml` and set `framework`, `data.image_dir` and `data.mask_dir` (the defaults are the Colab Drive paths). Keep `output_dir: outputs` (git ignores it, and `my_config.yaml`), because the results list the dataset's file names. Then
 
 ```
 uv sync --python 3.12 --extra pytorch     # or --extra keras (or both)
@@ -51,7 +51,8 @@ uv run python -m zona_pellucida.bin.run_experiments --config my_config.yaml
 On Windows, PyPI only has CPU builds of PyTorch. For an NVIDIA GPU, replace it after `uv sync` (a later `uv sync` switches back to the CPU build):
 
 ```
-uv pip install --reinstall torch --index-url https://download.pytorch.org/whl/cu128
+uv pip install --python .venv --reinstall torch --index-url https://download.pytorch.org/whl/cu128
+uv run python -c "import torch; print(torch.cuda.is_available())"   # True
 ```
 
 Outputs (in `<output_dir>/<framework>`): `config_used.yaml`, `environment.yaml` (with `models/<run>.{config,environment}.yaml` per model), `split.csv`, `splits/loeo_test_sample*.csv`, `class_balance.{png,csv}`, `class_balance_per_image.csv`, `results_comparison.csv`, `leave_one_embryo_out.csv`, `models/<run>.ckpt` (PyTorch) or `models/<run>.keras`, `histories/*.{pkl,csv}`, `thresholds/*.csv`, `logs/` (TensorBoard). The notebook also writes the thesis figures to `figures/` (`fig5_*.png` are named after the figures of Chapter 5).
@@ -73,7 +74,7 @@ Tests of a framework that is not installed are skipped. After changing the noteb
 
 ### Results
 
-`fcn.ipynb` writes the test-set metrics of both models (unweighted and weighted loss; accuracy, precision, recall, F1, IoU, Dice, at the 0.5 and the validation-selected threshold) to `results_comparison.csv`, the leave-one-embryo-out numbers to `leave_one_embryo_out.csv`, and the figures to `figures/`. The thesis reports the Keras results (Chapter 5).
+`fcn.ipynb` writes the test-set metrics of both models (unweighted and weighted loss; accuracy, precision, recall, F1, IoU, Dice, at the 0.5 and the validation-selected threshold) to `results_comparison.csv`, the leave-one-embryo-out numbers to `leave_one_embryo_out.csv`, and the figures to `figures/`. Accuracy, precision, recall, F1 and IoU are pooled over all test pixels (F1 = pooled Dice); `dice` is the mean of the per-image Dice scores (the thesis' "Average Dice") and `iou_per_image` its IoU counterpart. The training curves and the validation-threshold search use the pooled Dice. The thesis reports the Keras results (Chapter 5).
 
 ### Overfitting Issues
 

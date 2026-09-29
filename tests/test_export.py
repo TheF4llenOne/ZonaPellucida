@@ -150,8 +150,8 @@ def test_backend_modules_are_filtered():
     assert _for_framework("zona_pellucida.experiments", "keras")
 
 
-@pytest.mark.parametrize("framework", FRAMEWORKS)
 def test_export_records_this_projects_code_version(framework):
+    # `framework` fixture: skipped when that framework is not installed.
     from zona_pellucida.reproducibility import code_version
 
     source = build_pipeline(framework)

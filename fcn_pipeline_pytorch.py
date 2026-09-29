@@ -76,7 +76,7 @@ CLASS_WEIGHTING = 'inverse_frequency'  # or 'median_frequency'
 FIGURE_RUN = 'weighted'  # model shown in the qualitative figures
 USE_VAL_THRESHOLD = False  # figures at 0.5 (False) or at the val-selected threshold
 RUN_LEAVE_ONE_EMBRYO_OUT = True
-CONFIG_OVERRIDES = {}  # any other value of configs/config.yaml, e.g. {'train': {'batch_size': 8}}
+CONFIG_OVERRIDES = {}  # other values of configs/config.yaml, e.g. {'train': {'batch_size': 8}} (not the settings above, not experiments.runs)
 
 if FRAMEWORK not in ('pytorch', 'keras'):
     raise ValueError(f"FRAMEWORK must be 'pytorch' or 'keras', not {FRAMEWORK!r}")
@@ -216,6 +216,19 @@ def merge_dicts(base, overrides):
         else:
             merged[key] = value
     return merged
+
+
+def overlapping_keys(base, overrides, prefix=""):
+    """Dotted keys that are set in both nested dicts."""
+    keys = []
+    for key, value in overrides.items():
+        if key not in base:
+            continue
+        if isinstance(value, dict) and isinstance(base[key], dict):
+            keys += overlapping_keys(base[key], value, f"{prefix}{key}.")
+        else:
+            keys.append(f"{prefix}{key}")
+    return keys
 
 
 def _build(cls, values, path="config"):
@@ -404,7 +417,7 @@ logging.basicConfig(level=logging.INFO, stream=sys.stdout, force=True,
                     format='%(levelname)s %(name)s: %(message)s')
 
 # Configuration = configs/config.yaml + the values of the first cell
-cfg = load_config(overrides=merge_dicts({
+settings = {
     'framework': FRAMEWORK,
     'seed': SEED,
     'deterministic_ops': DETERMINISTIC_OPS,
@@ -414,7 +427,14 @@ cfg = load_config(overrides=merge_dicts({
     'class_weighting': {'method': CLASS_WEIGHTING},
     'experiments': {'figure_run': FIGURE_RUN},
     'leave_one_embryo_out': {'enabled': RUN_LEAVE_ONE_EMBRYO_OUT},
-}, CONFIG_OVERRIDES))
+}
+clashes = overlapping_keys(settings, CONFIG_OVERRIDES)
+if clashes:
+    raise ValueError(f'Set {clashes} in the first cell, not in CONFIG_OVERRIDES')
+cfg = load_config(overrides=merge_dicts(settings, CONFIG_OVERRIDES))
+if list(cfg.experiments.runs) != ['unweighted', 'weighted']:
+    raise ValueError('The notebook always trains both runs; experiments.runs '
+                     'is only used by zona_pellucida.bin.run_experiments')
 FIG_DIR = OUTPUT_DIR + '/figures'
 os.makedirs(FIG_DIR, exist_ok=True)
 
@@ -1524,7 +1544,7 @@ def select_threshold(y_true, y_prob, thresholds, metric="dice"):
     best_threshold = float(
         best.loc[(best["threshold"] - 0.5).abs().idxmin(), "threshold"]
     )
-    logger.info("Validation-selected threshold %.3f (%s %.4f)",
+    logger.info("Validation-selected threshold %.3f (pooled %s %.4f)",
                 best_threshold, metric, table[metric].max())
     return best_threshold, table
 
@@ -1642,7 +1662,8 @@ def run_experiment(loss, dataset, split, cfg, backend, name=None,
     for row in test_metrics:
         logger.info(
             "Run %s test @%.2f (%s): acc %.4f, precision %.4f, recall %.4f,"
-            " F1 %.4f, IoU %.4f, Dice %.4f", name, row["threshold"],
+            " F1 %.4f, IoU %.4f, Dice (per-image mean) %.4f", name,
+            row["threshold"],
             row["threshold_source"], row["accuracy"], row["precision"],
             row["recall"], row["f1"], row["iou"], row["dice"],
         )
@@ -1761,7 +1782,7 @@ test_scores = backend.evaluate(model, X_test, y_test, batch_size=cfg.train.batch
 test_loss, test_acc = test_scores['loss'], test_scores['accuracy']
 print("Test Loss:", test_loss)
 print("Test Accuracy:", test_acc)
-print("Test IoU:", test_scores['iou'], " Dice:", test_scores['dice'],
+print("Test IoU (pooled):", test_scores['iou'], " Dice (pooled, = F1):", test_scores['dice'],
       " Precision:", test_scores['precision'], " Recall:", test_scores['recall'])
 
 # ==============================================================================

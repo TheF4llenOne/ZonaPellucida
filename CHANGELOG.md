@@ -3,7 +3,7 @@
 ## 0.3.0
 
 - PyTorch Lightning implementation (`zona_pellucida/backends/pytorch`) next to the Keras one, behind a common backend interface; `FRAMEWORK` switch in the notebook, `framework` in the config, one single-file export per framework. The PyTorch network is tested to give the same output as the Keras model with the same weights.
-- Per-framework output folders, a `framework` column in the results, and the git commit of the code in every environment report.
+- Per-framework output folders, a `framework` column in the results, and the git commit of the code (when run from a git clone) in every environment report.
 - The training images are reshuffled every epoch by default (`train.shuffle: true`, reproducible from the seed).
 
 ## 0.2.0 (changes since the thesis notebook)
@@ -13,7 +13,7 @@ Code moved from the single notebook into the `zona_pellucida` package (config fi
 **Changes that affect the results**
 - Train / validation / test split (131 / 33 / 41, stratified by video) instead of 164 / 41 with the test set used as validation data. The kept epoch (best validation IoU, all 100 epochs trained) and the decision threshold are chosen on the validation set only; the training order stays random, as before.
 - Masks are resized with nearest-neighbour interpolation and binarised (the default bicubic filter created grey edge values).
-- IoU and Dice are computed against the binarised ground truth (any value above 0 used to count as zona pellucida).
+- IoU and Dice are computed against the binarised ground truth (the thesis IoU counted any mask value above 0 as zona pellucida; the thesis Dice counted grey edge pixels fractionally, by their grey value).
 - Frequency-weighted binary cross-entropy (inverse frequency, or median frequency) next to the unweighted baseline; foreground IoU, Dice, precision and recall monitored during training.
 - One seed for everything and deterministic ops; the split is saved to `split.csv`.
 - Leave-one-embryo-out robustness check.

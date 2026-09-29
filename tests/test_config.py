@@ -45,3 +45,12 @@ def test_load_backend_rejects_unknown_framework():
 
     with pytest.raises(ValueError, match="tensorflow"):
         load_backend("tensorflow")
+
+
+def test_overlapping_keys():
+    from zona_pellucida.config import overlapping_keys
+
+    base = {"seed": 1, "train": {"epochs": 100, "shuffle": True}}
+    assert overlapping_keys(base, {"train": {"batch_size": 8}}) == []
+    assert overlapping_keys(base, {"seed": 2, "train": {"epochs": 5}}) == [
+        "seed", "train.epochs"]

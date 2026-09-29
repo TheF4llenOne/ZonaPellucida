@@ -3,7 +3,8 @@
     python -m zona_pellucida.bin.run_experiments --config my_config.yaml
 
 `my_config.yaml` is a copy of zona_pellucida/configs/config.yaml with
-`framework`, `data.image_dir`, `data.mask_dir` and `output_dir` set. Loads
+`framework`, `data.image_dir` and `data.mask_dir` set (keep `output_dir:
+outputs`, which git ignores: the results list the dataset's file names). Loads
 and splits the data, writes the class-balance report, trains the
 unweighted and weighted models, and runs the leave-one-embryo-out check.
 Everything is written to <output_dir>/<framework>.

@@ -50,6 +50,10 @@ testpaths = ["tests"]
 # Slow tests train tiny models; run them with `pytest -m slow`. Tests of a
 # framework that is not installed are skipped.
 addopts = "-m 'not slow'"
+# The slow tests write models and logs to tmp_path: keep them only for
+# failed tests, so repeated runs do not fill the disk.
+tmp_path_retention_policy = "failed"
+tmp_path_retention_count = 1
 markers = [
     "slow: builds and trains tiny models",
 ]

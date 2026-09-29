@@ -68,9 +68,12 @@ def test_leave_one_embryo_out(small_cfg, backend):
     small_cfg.leave_one_embryo_out.runs = ["unweighted"]
     results, table = run_leave_one_embryo_out(dataset, small_cfg, backend)
     assert sorted(table["held_out_sample"].unique()) == [1, 2]
-    fold_sizes = {r.held_out_sample: r.test_metrics[0]["tp"]
-                  + r.test_metrics[0]["fn"] for r in results}
-    assert set(fold_sizes) == {1, 2}
+    # Each fold is evaluated on exactly the frames of its held-out video.
+    size = small_cfg.data.size
+    for result in results:
+        m = result.test_metrics[0]
+        n_test = int(np.sum(dataset.samples == result.held_out_sample))
+        assert m["tn"] + m["fp"] + m["fn"] + m["tp"] == n_test * size ** 2
     assert all(r.model is None for r in results)
 
 

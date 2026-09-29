@@ -41,6 +41,6 @@ def select_threshold(y_true, y_prob, thresholds, metric="dice"):
     best_threshold = float(
         best.loc[(best["threshold"] - 0.5).abs().idxmin(), "threshold"]
     )
-    logger.info("Validation-selected threshold %.3f (%s %.4f)",
+    logger.info("Validation-selected threshold %.3f (pooled %s %.4f)",
                 best_threshold, metric, table[metric].max())
     return best_threshold, table

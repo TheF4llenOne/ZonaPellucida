@@ -139,7 +139,8 @@ def run_experiment(loss, dataset, split, cfg, backend, name=None,
     for row in test_metrics:
         logger.info(
             "Run %s test @%.2f (%s): acc %.4f, precision %.4f, recall %.4f,"
-            " F1 %.4f, IoU %.4f, Dice %.4f", name, row["threshold"],
+            " F1 %.4f, IoU %.4f, Dice (per-image mean) %.4f", name,
+            row["threshold"],
             row["threshold_source"], row["accuracy"], row["precision"],
             row["recall"], row["f1"], row["iou"], row["dice"],
         )
