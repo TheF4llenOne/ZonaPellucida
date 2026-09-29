@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+uv.lock
+
+# Run artefacts (models, logs, figures, csv) are regenerated from the notebook
+outputs/
+*.keras
+*.weights.h5
+*.pkl
+.venv313/
+*.ckpt
+lightning_logs/

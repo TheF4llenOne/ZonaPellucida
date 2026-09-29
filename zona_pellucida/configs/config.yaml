@@ -1,0 +1,96 @@
+# Configuration of the zona pellucida FCN experiments.
+# Every value here can be overridden from the notebook via
+# `load_config(overrides={...})`.
+
+# Deep-learning framework: pytorch (PyTorch Lightning) or keras
+# (TensorFlow/Keras, as used for the thesis). Everything else is shared.
+framework: pytorch
+# Single seed for every source of randomness (split, weight init, dropout,
+# shuffling). Each figure cell of the notebook draws its images from its own
+# generator seeded from it.
+seed: 42
+# Deterministic ops (PyTorch: torch.use_deterministic_algorithms, Keras:
+# tf.config.experimental.enable_op_determinism). If an op has no
+# deterministic GPU kernel, training stops and names the op; it is never
+# disabled silently.
+deterministic_ops: true
+# Models, histories, figures and CSV files are written here (the command-line
+# runner adds a sub-folder per framework).
+output_dir: outputs
+
+data:
+  image_dir: /content/drive/MyDrive/images
+  mask_dir: /content/drive/MyDrive/masks
+  # Regexes with the named groups `sample` (video / embryo id) and `frame`.
+  # Images and masks are paired on (sample, frame), never on list position.
+  image_pattern: '^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$'
+  mask_pattern: '^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$'
+  size: 512
+  # Masks are scaled to [0, 1] and binarised with `> mask_threshold`.
+  mask_threshold: 0.5
+
+split:
+  # Fraction of all pairs held out for testing (41 of 205).
+  test_size: 0.2
+  # Fraction of the remaining pairs used for validation (33 of 164), i.e.
+  # choice of the kept epoch (and early stopping, if enabled) and threshold
+  # selection. 0 disables validation.
+  val_size: 0.2
+  # Keep the share of each video equal across train / val / test.
+  stratify_by_sample: true
+
+model:
+  dropout: 0.5
+
+train:
+  batch_size: 16
+  epochs: 100
+  learning_rate: 0.001
+  # false = the same (random) batch order in every epoch, as in the thesis.
+  # true = reshuffled every epoch, reproducibly from the seed.
+  shuffle: false
+  # The weights of the epoch with the best validation value of `monitor` are
+  # kept. Foreground IoU does not depend on the loss, so the weighted and
+  # unweighted runs are selected by the same criterion.
+  monitor: val_iou
+  mode: max
+  early_stopping:
+    # false = train all `epochs` (as in the thesis), then restore the best
+    # epoch. true = stop when `monitor` has not improved for `patience`
+    # epochs; epochs before `start_from_epoch` are ignored (in the saved run
+    # of the original notebook, not the thesis run, the unweighted model only
+    # learned the zona from about epoch 35).
+    enabled: false
+    patience: 20
+    start_from_epoch: 40
+  tensorboard:
+    enabled: true
+    histogram_freq: 1
+
+class_weighting:
+  # inverse_frequency (default): w_c = N_total / (C * n_c)
+  # median_frequency (SegNet):    w_c = median_freq / freq_c
+  method: inverse_frequency
+
+evaluation:
+  # Fixed decision threshold on the sigmoid output.
+  threshold: 0.5
+  # Also pick the Dice-optimal threshold on the validation set and report
+  # the test metrics at that threshold.
+  tune_threshold: true
+  threshold_min: 0.05
+  threshold_max: 0.95
+  threshold_steps: 19
+  tuning_metric: dice
+
+experiments:
+  # unweighted = binary cross-entropy (thesis baseline)
+  # weighted   = frequency-weighted binary cross-entropy
+  runs: [unweighted, weighted]
+  # Run used for the qualitative figures (predictions, confusion matrix...).
+  figure_run: weighted
+
+leave_one_embryo_out:
+  # Robustness check: train on one video, test on the other.
+  enabled: true
+  runs: [unweighted, weighted]

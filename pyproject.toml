@@ -1,0 +1,59 @@
+[project]
+name = "zona-pellucida"
+version = "0.3.0"
+description = "FCN (U-Net-style) segmentation of the zona pellucida in embryo images, in PyTorch Lightning and TensorFlow/Keras"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy",
+    "pillow",
+    "opencv-python-headless",
+    "scikit-learn",
+    "scipy",
+    "pandas",
+    "matplotlib",
+    "seaborn",
+    "pyyaml",
+    "tensorboard",
+]
+
+[project.optional-dependencies]
+# Install at least one framework: uv sync --extra pytorch (or --extra keras)
+pytorch = [
+    "torch>=2.4",
+    "lightning>=2.4,<3",
+    "torchmetrics>=1.4",
+]
+keras = [
+    "tensorflow>=2.16",
+    "keras>=3.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "nbformat",
+    "nbclient",
+    "ipykernel",
+    "ruff",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build]
+include = ["zona_pellucida/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Slow tests train tiny models; run them with `pytest -m slow`. Tests of a
+# framework that is not installed are skipped.
+addopts = "-m 'not slow'"
+markers = [
+    "slow: builds and trains tiny models",
+]
+
+[tool.ruff]
+line-length = 80
+extend-exclude = ["*.ipynb"]
