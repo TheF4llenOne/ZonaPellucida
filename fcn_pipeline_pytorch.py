@@ -659,16 +659,57 @@ def _stratify(labels, indices, enabled):
     return labels[indices] if enabled else None
 
 
-def train_val_test_split(samples, test_size=0.2, val_size=0.2, seed=42,
-                         stratify_by_sample=True):
-    """Random frame-level split into train / val / test.
+def _count(fraction, total):
+    """`fraction` of `total`, rounded half up, at least 1."""
+    return max(1, int(fraction * total + 0.5))
 
-    The test set is taken first (`test_size` of all pairs); validation is
-    `val_size` of the remainder. `samples` (the video id of every pair) is
-    used to stratify so each split holds the same share of each video.
-    The training indices stay in random order (see `Split`).
+
+def _draw_samples(candidates, fraction, rng, purpose):
+    """Draw `fraction` of the sample (embryo) ids `candidates` with `rng`,
+    at least one, and leave at least one for training. Sorted ids."""
+    count = _count(fraction, len(candidates))
+    if count >= len(candidates):
+        raise ValueError(
+            f"{len(candidates)} embryos are too few to take {fraction:.0%} "
+            f"of them for {purpose} and keep some for training")
+    return np.sort(rng.choice(candidates, size=count, replace=False))
+
+
+def _group_split(samples, test_size, val_size, seed):
+    """Whole samples (embryos) go to one subset."""
+    rng = np.random.default_rng(seed)
+    embryos = np.unique(samples)
+    test_ids = _draw_samples(embryos, test_size, rng, "testing")
+    rest = np.setdiff1d(embryos, test_ids)
+    val_ids = (_draw_samples(rest, val_size, rng, "validation")
+               if val_size > 0 else rest[:0])
+    test = np.flatnonzero(np.isin(samples, test_ids))
+    val = np.flatnonzero(np.isin(samples, val_ids))
+    train = np.flatnonzero(
+        ~np.isin(samples, np.concatenate([test_ids, val_ids])))
+    # Random training order: with shuffle=False it is the batch order.
+    return Split(rng.permutation(train), val, test)
+
+
+def train_val_test_split(samples, test_size=0.2, val_size=0.2, seed=42,
+                         stratify_by_sample=True, group_by_sample=False):
+    """Split the pairs into train / val / test.
+
+    `samples` is the embryo (video) id of every pair. With
+    `group_by_sample`, whole embryos go to one subset: `test_size` of the
+    embryos for testing and `val_size` of the remaining embryos for
+    validation (rounded half up, at least one each), so all time points of
+    an embryo stay together. Without it, the split is frame-level (first
+    thesis version): `test_size` of all pairs for testing and `val_size` of
+    the remainder for validation, stratified by video if
+    `stratify_by_sample`. The training indices stay in random order (see
+    `Split`).
     """
     samples = np.asarray(samples)
+    if group_by_sample:
+        split = _group_split(samples, test_size, val_size, seed)
+        logger.info("Split sizes: %s", split.sizes())
+        return split
     indices = np.arange(len(samples))
     trainval, test = train_test_split(
         indices, test_size=test_size, random_state=seed,
