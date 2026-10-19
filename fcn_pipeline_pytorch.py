@@ -1676,6 +1676,7 @@ class RunResult:
     val_threshold: float = None
     threshold_table: pd.DataFrame = None
     held_out_sample: int = None
+    per_image: pd.DataFrame = None
 
 
 def tensorboard_log_dir(output_dir, run_name):
@@ -1698,6 +1699,52 @@ def save_history(history, path):
 def load_history(path):
     with open(path, "rb") as f:
         return pickle.load(f)
+
+
+def per_image_table(dataset, probabilities, thresholds):
+    """Dice and IoU of every image at every (source, threshold) pair.
+
+    Their means are the `dice` and `iou_per_image` columns of the results.
+    """
+    y_true = binarize(dataset.masks, 0.5)
+    tables = []
+    for source, threshold in thresholds:
+        y_pred = binarize(probabilities, threshold)
+        tables.append(pd.DataFrame({
+            "image_file": dataset.image_files,
+            "sample": dataset.samples,
+            "frame": dataset.frames,
+            "threshold_source": source,
+            "threshold": float(threshold),
+            "dice": per_image_scores(y_true, y_pred, dice_coefficient),
+            "iou": per_image_scores(y_true, y_pred, iou_coefficient),
+        }))
+    return pd.concat(tables, ignore_index=True)
+
+
+def summarize_by_time(per_image):
+    """Per loss, threshold source and time point (`frame`, in hours): the
+    number of images and the mean and (population) standard deviation of
+    the per-image Dice and IoU."""
+    def spread(values):
+        return values.std(ddof=0)
+
+    return (per_image.groupby(["loss", "threshold_source", "frame"])
+            .agg(n=("dice", "size"), dice=("dice", "mean"),
+                 dice_std=("dice", spread), iou=("iou", "mean"),
+                 iou_std=("iou", spread))
+            .reset_index())
+
+
+def save_time_summary(results, path):
+    """Write summarize_by_time of the per-image scores of `results`."""
+    table = summarize_by_time(
+        pd.concat([r.per_image for r in results], ignore_index=True))
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(path, index=False)
+    logger.info("Saved the scores per time point to %s", path)
+    return table
 
 
 def run_experiment(loss, dataset, split, cfg, backend, name=None,
@@ -1765,13 +1812,19 @@ def run_experiment(loss, dataset, split, cfg, backend, name=None,
             row["threshold_source"], row["accuracy"], row["precision"],
             row["recall"], row["f1"], row["iou"], row["dice"],
         )
+    per_image = per_image_table(test, test_prob, thresholds)
+    per_image.insert(0, "run", name)
+    per_image.insert(1, "loss", loss)
+    per_image_path = output_dir / "per_image" / f"{name}.csv"
+    per_image_path.parent.mkdir(parents=True, exist_ok=True)
+    per_image.to_csv(per_image_path, index=False)
     return RunResult(
         framework=backend.name, name=name, loss=loss, model=model if keep_model else None,
         model_path=model_path,
         history=history, best_epoch=best_epoch, class_weights=class_weights,
         test_scores=test_scores, test_metrics=test_metrics,
         val_threshold=val_threshold, threshold_table=threshold_table,
-        held_out_sample=held_out_sample,
+        held_out_sample=held_out_sample, per_image=per_image,
     )
 
 
@@ -1816,6 +1869,8 @@ def run_comparison(dataset, split, cfg, backend):
         list(results.values()),
         Path(cfg.output_dir) / "results_comparison.csv",
     )
+    save_time_summary(list(results.values()),
+                      Path(cfg.output_dir) / "results_by_time.csv")
     return results, table
 
 
@@ -1858,11 +1913,14 @@ results['weighted'] = run_experiment('weighted', dataset, split, cfg, backend)
 # %% Notebook cell 26
 # Test-set comparison of both runs for Chapter 5 (saved to OUTPUT_DIR/results_comparison.csv)
 comparison = save_results(list(results.values()), OUTPUT_DIR + '/results_comparison.csv')
+# Mean per-image Dice and IoU per time point (frame = hours after insemination)
+time_table = save_time_summary(list(results.values()), OUTPUT_DIR + '/results_by_time.csv')
 # The configuration and environment that produced these results
 save_config(cfg, OUTPUT_DIR + '/config_used.yaml')
 log_versions(backend, OUTPUT_DIR + '/environment.yaml')
 print(comparison[['run', 'threshold_source', 'threshold', 'accuracy', 'precision',
                   'recall', 'f1', 'iou', 'dice', 'best_epoch', 'epochs_trained']].to_string(index=False))
+print(time_table.round(4).to_string(index=False))
 
 # %% Notebook cell 28
 # Load the trained model and training history of FIGURE_RUN
