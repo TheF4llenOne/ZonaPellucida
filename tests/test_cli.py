@@ -17,7 +17,7 @@ def test_command_line_run(framework, synthetic_dirs, tmp_path):
                        size=32)
     cfg["train"].update(epochs=2, batch_size=4)
     cfg["train"]["tensorboard"]["enabled"] = False
-    cfg["leave_one_embryo_out"]["enabled"] = False
+    cfg["cross_validation"]["enabled"] = False
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml.safe_dump(cfg), encoding="utf-8")
 

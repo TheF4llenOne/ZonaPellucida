@@ -20,24 +20,34 @@ deterministic_ops: true
 output_dir: outputs
 
 data:
-  image_dir: /content/drive/MyDrive/images
-  mask_dir: /content/drive/MyDrive/masks
-  # Regexes with the named groups `sample` (video / embryo id) and `frame`.
-  # Images and masks are paired on (sample, frame), never on list position.
-  image_pattern: '^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$'
-  mask_pattern: '^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$'
+  image_dir: /content/drive/MyDrive/g_embryos_dataset/images
+  mask_dir: /content/drive/MyDrive/g_embryos_dataset/masks
+  # Regexes with the named groups `sample` (embryo id) and `frame` (time
+  # point in hours): embryo208_25h.png is embryo P08 of dish 2 at 25 h, its
+  # mask embryo208_25h_mask.png. Images and masks are paired on (sample,
+  # frame), never on list position. The 205 video frames of the first
+  # thesis version: '^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$' and
+  # '^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$'.
+  image_pattern: '^embryo(?P<sample>\d+)_(?P<frame>\d+)h\.png$'
+  mask_pattern: '^embryo(?P<sample>\d+)_(?P<frame>\d+)h_mask\.png$'
   size: 512
   # Masks are scaled to [0, 1] and binarised with `> mask_threshold`.
   mask_threshold: 0.5
 
 split:
-  # Fraction of all pairs held out for testing (41 of 205).
+  # Fraction of the embryos (without grouping: of all pairs) held out for
+  # testing: 6 of the 30 embryos.
   test_size: 0.2
-  # Fraction of the remaining pairs used for validation (33 of 164), i.e.
-  # choice of the kept epoch (and early stopping, if enabled) and threshold
-  # selection. 0 disables validation.
+  # Fraction of the remaining embryos (pairs) used for validation (5 of 24),
+  # i.e. choice of the kept epoch (and early stopping, if enabled) and
+  # threshold selection. 0 disables validation.
   val_size: 0.2
-  # Keep the share of each video equal across train / val / test.
+  # true: whole embryos go to one subset, so all time points of an embryo
+  # are in training, validation or test. false: frame-level split, as in
+  # the first thesis version (two videos).
+  group_by_sample: true
+  # Without grouping only: keep the share of each video equal across
+  # train / val / test.
   stratify_by_sample: true
 
 model:
@@ -93,7 +103,12 @@ experiments:
   # Run used for the qualitative figures (predictions, confusion matrix...).
   figure_run: weighted
 
-leave_one_embryo_out:
-  # Robustness check: train on one video, test on the other.
+cross_validation:
+  # Robustness check next to the main split: the embryos are shuffled
+  # (seed) and dealt into `folds` groups; each group is the test set of one
+  # fold, so every embryo is tested once. With folds equal to the number of
+  # embryos this is leave-one-embryo-out (the two videos of the first
+  # thesis version: folds 2 and split.group_by_sample false).
   enabled: true
+  folds: 5
   runs: [unweighted, weighted]

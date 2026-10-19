@@ -6,7 +6,7 @@
 `framework`, `data.image_dir` and `data.mask_dir` set (keep `output_dir:
 outputs`, which git ignores: the results list the dataset's file names). Loads
 and splits the data, writes the class-balance report, trains the
-unweighted and weighted models, and runs the leave-one-embryo-out check.
+unweighted and weighted models, and runs the cross-validation by embryo.
 Everything is written to <output_dir>/<framework>.
 """
 
@@ -26,8 +26,8 @@ from zona_pellucida.data.loading import load_dataset_from_config
 from zona_pellucida.data.splitting import save_split, train_val_test_split
 from zona_pellucida.experiments import (
     run_comparison,
-    run_leave_one_embryo_out,
-    summarize_leave_one_embryo_out,
+    run_cross_validation,
+    summarize_cross_validation,
 )
 from zona_pellucida.reproducibility import log_versions
 
@@ -50,7 +50,7 @@ def main(config_path=None):
     dataset = load_dataset_from_config(cfg.data)
     split = train_val_test_split(
         dataset.samples, cfg.split.test_size, cfg.split.val_size, cfg.seed,
-        cfg.split.stratify_by_sample,
+        cfg.split.stratify_by_sample, cfg.split.group_by_sample,
     )
     save_split(dataset, split, output_dir / "split.csv")
 
@@ -61,10 +61,10 @@ def main(config_path=None):
     _, table = run_comparison(dataset, split, cfg, backend)
     logger.info("Results:\n%s", table.to_string())
 
-    if cfg.leave_one_embryo_out.enabled:
-        _, loeo = run_leave_one_embryo_out(dataset, cfg, backend)
-        logger.info("Leave-one-embryo-out:\n%s",
-                    summarize_leave_one_embryo_out(loeo).to_string())
+    if cfg.cross_validation.enabled:
+        _, cv_table = run_cross_validation(dataset, cfg, backend)
+        logger.info("Cross-validation by embryo:\n%s",
+                    summarize_cross_validation(cv_table).to_string())
 
 
 if __name__ == "__main__":

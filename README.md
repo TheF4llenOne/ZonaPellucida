@@ -6,7 +6,7 @@ Semantic segmentation of the zona pellucida in time-lapse images of human embryo
 
 - **Two frameworks, one pipeline**: a framework-neutral core (data, splits, class weights, metrics, figures, experiments) and two backends with the same interface (`zona_pellucida/backends/{pytorch,keras}`). The PyTorch network is a layer-for-layer port of the Keras model; a test copies the Keras weights into it and checks that both give the same output.
 - **Class imbalance**: the zona pellucida is ~5% of the pixels. Frequency-normalised class weights (inverse frequency or SegNet median frequency) and a per-pixel weighted binary cross-entropy; foreground IoU, Dice, precision and recall instead of pixel accuracy alone.
-- **Sound evaluation**: train / validation / test split (131 / 33 / 41, stratified by video); best epoch and decision threshold chosen on validation only; a leave-one-embryo-out check, since frames of one video are highly correlated.
+- **Sound evaluation**: train / validation / test split by embryo (19 / 5 / 6 embryos), so no embryo is in two subsets; best epoch and decision threshold chosen on validation only; 5-fold cross-validation by embryo (every embryo tested once) and the scores per time point (25, 69, 117 h).
 - **Reproducibility**: one seed for everything, deterministic GPU ops (bit-exact reruns tested on CPU and on a CUDA GPU with PyTorch), saved split, and the config and environment (library versions, GPU, CUDA/cuDNN) stored next to every model.
 
 ### Model
@@ -26,9 +26,9 @@ zona_pellucida/
 ├── configs/config.yaml   # all settings (framework, seed, paths, split, training, weighting, evaluation)
 ├── config.py             # YAML -> typed config
 ├── reproducibility.py    # seeding, determinism errors, environment report
-├── data/                 # loading & pairing, splits (incl. leave-one-embryo-out), class balance & weights
+├── data/                 # loading & pairing, splits by embryo & cross-validation, class balance & weights
 ├── evaluation/           # test metrics, validation threshold selection
-├── experiments.py        # unweighted vs weighted runs, leave-one-embryo-out (framework-neutral)
+├── experiments.py        # unweighted vs weighted runs, cross-validation by embryo (framework-neutral)
 ├── plots.py              # figures
 ├── backends/
 │   ├── pytorch/          # UNet nn.Module, weighted BCE-with-logits, LightningModule (torchmetrics), Trainer + callbacks
@@ -39,7 +39,7 @@ tests/                    # pytest on synthetic data: shared, pytorch/, keras/
 
 ### Running
 
-**Colab:** put the data in `MyDrive/images` and `MyDrive/masks`, and the code in `MyDrive/ZonaPellucida`: either copy a git clone of the repository there (with its hidden `.git` folder, so the environment reports can record the code version; a ZIP download has none), or let the notebook clone it from GitHub. Open `fcn.ipynb`, choose `FRAMEWORK` in the first cell and run it from the top. PyTorch and TensorFlow are preinstalled on Colab; the notebook installs PyTorch Lightning and torchmetrics. Settings are in the first cell (`SEED`, paths, `SHUFFLE`, `CLASS_WEIGHTING`, ...); everything else is in `configs/config.yaml` and can be overridden with `CONFIG_OVERRIDES` (settings of the first cell are changed there; `experiments.runs` is fixed: the notebook always trains both runs). Results go to `MyDrive/ZonaPellucida_outputs/<framework>`, outside the code folder. Restart the runtime after changing `FRAMEWORK`.
+**Colab:** put the data in `MyDrive/g_embryos_dataset/images` and `MyDrive/g_embryos_dataset/masks` (files named `embryo208_25h.png` and `embryo208_25h_mask.png`: embryo P08 of dish 2 at 25 h), and the code in `MyDrive/ZonaPellucida`: either copy a git clone of the repository there (with its hidden `.git` folder, so the environment reports can record the code version; a ZIP download has none), or let the notebook clone it from GitHub. Open `fcn.ipynb`, choose `FRAMEWORK` in the first cell and run it from the top. PyTorch and TensorFlow are preinstalled on Colab; the notebook installs PyTorch Lightning and torchmetrics. Settings are in the first cell (`SEED`, paths, `SHUFFLE`, `CLASS_WEIGHTING`, ...); everything else is in `configs/config.yaml` and can be overridden with `CONFIG_OVERRIDES` (settings of the first cell are changed there; `experiments.runs` is fixed: the notebook always trains both runs). Results go to `MyDrive/ZonaPellucida_outputs/<framework>`, outside the code folder. Restart the runtime after changing `FRAMEWORK`.
 
 **Locally:** copy `zona_pellucida/configs/config.yaml` to `my_config.yaml` and set `framework`, `data.image_dir` and `data.mask_dir` (the defaults are the Colab Drive paths). Keep `output_dir: outputs` (git ignores it, and `my_config.yaml`), because the results list the dataset's file names. Then
 
@@ -55,7 +55,7 @@ uv pip install --python .venv --reinstall torch --index-url https://download.pyt
 uv run python -c "import torch; print(torch.cuda.is_available())"   # True
 ```
 
-Outputs (in `<output_dir>/<framework>`): `config_used.yaml`, `environment.yaml` (with `models/<run>.{config,environment}.yaml` per model), `split.csv`, `splits/loeo_test_sample*.csv`, `class_balance.{png,csv}`, `class_balance_per_image.csv`, `results_comparison.csv`, `leave_one_embryo_out.csv`, `models/<run>.ckpt` (PyTorch) or `models/<run>.keras`, `histories/*.{pkl,csv}`, `thresholds/*.csv`, `logs/` (TensorBoard). The notebook also writes the thesis figures to `figures/` (`fig5_*.png` are named after the figures of Chapter 5).
+Outputs (in `<output_dir>/<framework>`): `config_used.yaml`, `environment.yaml` (with `models/<run>.{config,environment}.yaml` per model), `split.csv`, `splits/cv_fold*.csv`, `class_balance.{png,csv}`, `class_balance_per_image.csv`, `results_comparison.csv`, `results_by_time.csv`, `per_image/<run>.csv`, `cross_validation.csv`, `cross_validation_summary.csv`, `cross_validation_by_time.csv`, `models/<run>.ckpt` (PyTorch) or `models/<run>.keras`, `histories/*.{pkl,csv}`, `thresholds/*.csv`, `logs/` (TensorBoard). The notebook also writes the thesis figures to `figures/` (`fig5_*.png` are named after the figures of Chapter 5).
 
 ### Reproducibility
 
@@ -74,16 +74,13 @@ Tests of a framework that is not installed are skipped. After changing the noteb
 
 ### Results
 
-`fcn.ipynb` writes the test-set metrics of both models (unweighted and weighted loss; accuracy, precision, recall, F1, IoU, Dice, at the 0.5 and the validation-selected threshold) to `results_comparison.csv`, the leave-one-embryo-out numbers to `leave_one_embryo_out.csv`, and the figures to `figures/`. Accuracy, precision, recall, F1 and IoU are pooled over all test pixels (F1 = pooled Dice); `dice` is the mean of the per-image Dice scores (the thesis' "Average Dice") and `iou_per_image` its IoU counterpart. The training curves and the validation-threshold search use the pooled Dice. The thesis reports the Keras results (Chapter 5).
+`fcn.ipynb` writes the test-set metrics of both models (unweighted and weighted loss; accuracy, precision, recall, F1, IoU, Dice, at the 0.5 and the validation-selected threshold) to `results_comparison.csv`, the scores per time point to `results_by_time.csv`, the cross-validation numbers to `cross_validation.csv` (summary: `cross_validation_summary.csv`, per time point: `cross_validation_by_time.csv`), and the figures to `figures/`. Accuracy, precision, recall, F1 and IoU are pooled over all test pixels (F1 = pooled Dice); `dice` is the mean of the per-image Dice scores (the thesis' "Average Dice") and `iou_per_image` its IoU counterpart. The training curves and the validation-threshold search use the pooled Dice. The thesis reports the Keras results (Chapter 5). In `cross_validation_summary.csv` the `_std` columns are the sample standard deviation of the five fold values; `dice_std`, `iou_per_image_std` and the `_std` columns of the by-time tables are the population standard deviation over the test images.
 
-### Overfitting Issues
+### Data
 
-Due to the limited size of the dataset, the model faces overfitting issues. The dataset consists of 205 images with corresponding masks, sourced from two videos:
+The first thesis version used 205 frames of two time-lapse videos (105 and 100 frames of two embryos). Consecutive frames are nearly identical, so a frame-level split put near-duplicates of the test frames into the training set, and the model overfitted to the two embryos. The current dataset has 89 labelled images of 30 embryos from three culture dishes, each embryo imaged at 25, 69 and 117 hours after insemination (one 117 h image left out: the embryo is mostly outside the picture), and the split and the cross-validation are by embryo. A further dish (dish 3, 8 embryos) is not used yet: only the outer edge of its zona pellucida was traced. The embryos of one dish share culture and imaging conditions, and the split and the cross-validation are by embryo, not by dish, so the test embryos come from dishes that are also in the training set.
 
-- 105 images from a video of one embryo
-- 100 images from a video of another embryo
-
-The relatively small size and limited diversity of the dataset contribute to the model's tendency to overfit. Some solutions are provided in the Future work section.
+To rerun the first version on the 205 video frames, set `data.image_pattern: '^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$'`, `data.mask_pattern: '^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$'`, `split.group_by_sample: false` and `cross_validation.folds: 2` (leave-one-embryo-out with the splits of version 0.3.0).
 
 ### Future Work
 
@@ -92,9 +89,9 @@ The relatively small size and limited diversity of the dataset contribute to the
 - Model Improvements: Exploring advanced architectures like DeepLab for improved performance.
 - Data Augmentation: Implementing advanced augmentation techniques to increase dataset variability.
 - Regularization: L2 weight decay and stronger augmentation (the model already uses dropout).
-- Cross-Validation: Implement cross-validation to better evaluate model performance and generalizability. A leave-one-embryo-out check (train on one video, test on the other) is included.
+- Cross-Validation: 5-fold cross-validation by embryo is included; a split by culture dish would also test generalisation to new culture dishes.
 
-### Dataset
+### Data availability
 
 The dataset used for training and evaluation consists of time-lapse images of human embryos, with manual annotations for the zona pellucida. Due to privacy and ethical considerations, the dataset cannot be shared publicly. However, instructions for replicating the dataset preparation process can be provided upon request.
 

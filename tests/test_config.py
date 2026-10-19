@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from zona_pellucida.config import Config, load_config, merge_dicts
@@ -14,6 +16,25 @@ def test_default_patterns_match_loader():
     assert Config().data.mask_pattern == MASK_PATTERN
 
 
+def test_default_names_are_the_embryo_images():
+    data = Config().data
+    for pattern, name in ((data.image_pattern, "embryo208_25h.png"),
+                          (data.mask_pattern, "embryo208_25h_mask.png")):
+        assert re.match(pattern, name).groupdict() == {"sample": "208",
+                                                       "frame": "25"}
+    assert re.match(data.image_pattern, "embryo208_25h_mask.png") is None
+
+
+def test_split_by_embryo_is_the_default():
+    assert Config().split.group_by_sample is True
+
+
+def test_cross_validation_defaults():
+    cv = Config().cross_validation
+    assert (cv.enabled, cv.folds, cv.runs) == (True, 5,
+                                               ["unweighted", "weighted"])
+
+
 def test_overrides_are_merged_recursively():
     cfg = load_config(overrides={"seed": 7, "train": {"epochs": 3}})
     assert cfg.seed == 7
@@ -26,6 +47,12 @@ def test_overrides_are_merged_recursively():
 def test_unknown_key_raises():
     with pytest.raises(KeyError, match="train"):
         load_config(overrides={"train": {"epoch": 3}})
+
+
+def test_old_leave_one_embryo_out_key_names_its_replacement():
+    with pytest.raises(KeyError, match="leave_one_embryo_out was renamed "
+                                       "to cross_validation"):
+        load_config(overrides={"leave_one_embryo_out": {"enabled": False}})
 
 
 def test_missing_explicit_file_raises(tmp_path):

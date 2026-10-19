@@ -76,8 +76,9 @@ def test_notebook_runs_end_to_end(framework, synthetic_dirs, tmp_path):
     outputs = Path(tmp_path / "outputs")
     table = pd.read_csv(outputs / "results_comparison.csv")
     assert set(table["run"]) == {"unweighted", "weighted"}
-    for name in ("leave_one_embryo_out.csv", "environment.yaml",
-                 "class_balance.png", "split.csv"):
+    for name in ("cross_validation.csv", "cross_validation_summary.csv",
+                 "cross_validation_by_time.csv", "results_by_time.csv",
+                 "environment.yaml", "class_balance.png", "split.csv"):
         assert (outputs / name).exists(), name
     suffix = {"pytorch": ".ckpt", "keras": ".keras"}[framework]
     assert (outputs / "models" / f"weighted{suffix}").exists()

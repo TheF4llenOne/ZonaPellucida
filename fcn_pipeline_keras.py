@@ -58,8 +58,8 @@ FRAMEWORK = 'keras'
 DETERMINISTIC_OPS = True  # stop (naming the op) if an op is not deterministic
 
 DRIVE_DIR = '/content/drive/MyDrive'
-IMAGE_DIR = DRIVE_DIR + '/images'
-MASK_DIR = DRIVE_DIR + '/masks'
+IMAGE_DIR = DRIVE_DIR + '/g_embryos_dataset/images'  # embryo208_25h.png ...
+MASK_DIR = DRIVE_DIR + '/g_embryos_dataset/masks'  # embryo208_25h_mask.png ...
 REPO_DIR = DRIVE_DIR + '/ZonaPellucida'  # copy of this repository (code)
 OUTPUT_DIR = DRIVE_DIR + '/ZonaPellucida_outputs/' + FRAMEWORK  # figures, tables, models, logs
 
@@ -69,7 +69,7 @@ SHUFFLE = True  # reshuffle the training images every epoch (see "Shuffling")
 CLASS_WEIGHTING = 'inverse_frequency'  # or 'median_frequency'
 FIGURE_RUN = 'weighted'  # model shown in the qualitative figures
 USE_VAL_THRESHOLD = False  # figures at 0.5 (False) or at the val-selected threshold
-RUN_LEAVE_ONE_EMBRYO_OUT = True
+RUN_CROSS_VALIDATION = True  # 5-fold cross-validation by embryo after the main runs (10 more trainings)
 CONFIG_OVERRIDES = {}  # other values of configs/config.yaml, e.g. {'train': {'batch_size': 8}} (not the settings above, not experiments.runs)
 
 if FRAMEWORK not in ('pytorch', 'keras'):
@@ -103,11 +103,11 @@ DEFAULT_CONFIG_PATH = (
 
 @dataclass
 class DataConfig:
-    image_dir: str = "/content/drive/MyDrive/images"
-    mask_dir: str = "/content/drive/MyDrive/masks"
-    image_pattern: str = r"^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$"
+    image_dir: str = "/content/drive/MyDrive/g_embryos_dataset/images"
+    mask_dir: str = "/content/drive/MyDrive/g_embryos_dataset/masks"
+    image_pattern: str = r"^embryo(?P<sample>\d+)_(?P<frame>\d+)h\.png$"
     mask_pattern: str = (
-        r"^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$"
+        r"^embryo(?P<sample>\d+)_(?P<frame>\d+)h_mask\.png$"
     )
     size: int = 512
     mask_threshold: float = 0.5
@@ -117,6 +117,7 @@ class DataConfig:
 class SplitConfig:
     test_size: float = 0.2
     val_size: float = 0.2
+    group_by_sample: bool = True
     stratify_by_sample: bool = True
 
 
@@ -174,8 +175,9 @@ class ExperimentsConfig:
 
 
 @dataclass
-class LeaveOneEmbryoOutConfig:
+class CrossValidationConfig:
     enabled: bool = True
+    folds: int = 5
     runs: list = field(default_factory=lambda: ["unweighted", "weighted"])
 
 
@@ -194,8 +196,8 @@ class Config:
     )
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     experiments: ExperimentsConfig = field(default_factory=ExperimentsConfig)
-    leave_one_embryo_out: LeaveOneEmbryoOutConfig = field(
-        default_factory=LeaveOneEmbryoOutConfig
+    cross_validation: CrossValidationConfig = field(
+        default_factory=CrossValidationConfig
     )
 
     def to_dict(self):
@@ -226,13 +228,20 @@ def overlapping_keys(base, overrides, prefix=""):
     return keys
 
 
+# Keys of earlier versions and the keys that replaced them
+RENAMED_KEYS = {"leave_one_embryo_out": "cross_validation"}
+
+
 def _build(cls, values, path="config"):
     """Build dataclass `cls` from a dict, rejecting unknown keys."""
     hints = typing.get_type_hints(cls)
     known = {f.name for f in dataclasses.fields(cls)}
     unknown = set(values) - known
     if unknown:
-        raise KeyError(f"Unknown key(s) in {path}: {sorted(unknown)}")
+        renamed = "".join(
+            f"; {key} was renamed to {RENAMED_KEYS[key]} in version 0.4.0"
+            for key in sorted(unknown) if key in RENAMED_KEYS)
+        raise KeyError(f"Unknown key(s) in {path}: {sorted(unknown)}{renamed}")
     kwargs = {}
     for name, value in values.items():
         hint = hints[name]
@@ -421,7 +430,7 @@ settings = {
     'train': {'epochs': EPOCHS, 'shuffle': SHUFFLE},
     'class_weighting': {'method': CLASS_WEIGHTING},
     'experiments': {'figure_run': FIGURE_RUN},
-    'leave_one_embryo_out': {'enabled': RUN_LEAVE_ONE_EMBRYO_OUT},
+    'cross_validation': {'enabled': RUN_CROSS_VALIDATION},
 }
 clashes = overlapping_keys(settings, CONFIG_OVERRIDES)
 if clashes:
@@ -439,8 +448,16 @@ os.makedirs(FIG_DIR, exist_ok=True)
 # ==============================================================================
 
 
-IMAGE_PATTERN = r"^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$"
-MASK_PATTERN = r"^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$"
+# Image and mask names of the labelled embryo images: embryo<dish><P>_<hours>h,
+# e.g. embryo208_25h.png and embryo208_25h_mask.png. `sample` is the
+# embryo, `frame` the time point in hours.
+IMAGE_PATTERN = r"^embryo(?P<sample>\d+)_(?P<frame>\d+)h\.png$"
+MASK_PATTERN = r"^embryo(?P<sample>\d+)_(?P<frame>\d+)h_mask\.png$"
+# The 205 video frames of the first thesis version (sample = video).
+VIDEO_IMAGE_PATTERN = r"^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$"
+VIDEO_MASK_PATTERN = (
+    r"^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$"
+)
 
 
 @dataclass
@@ -451,8 +468,8 @@ class SegmentationDataset:
     masks: np.ndarray  # (N, H, W, 1) float32 in {0, 1}
     image_files: list
     mask_files: list
-    samples: np.ndarray  # (N,) video / embryo id
-    frames: np.ndarray  # (N,) frame number within the video
+    samples: np.ndarray  # (N,) embryo (video) id
+    frames: np.ndarray  # (N,) time point in hours (video frame number)
 
     def __len__(self):
         return len(self.images)
@@ -632,10 +649,11 @@ plt.show()
 class Split:
     """Row indices into a SegmentationDataset.
 
-    `train` keeps the random order produced by train_test_split: with
-    shuffle=False this is the (fixed) batch order of every epoch, as in the
-    thesis. Sorting it would give batches of consecutive frames of one
-    video. `val` and `test` are sorted (their order does not matter).
+    `train` is in random order (drawn from the seed): with shuffle=False
+    this is the (fixed) batch order of every epoch, as in the thesis.
+    Sorted indices would give batches of one embryo's images (or of
+    consecutive frames of one video). `val` and `test` are sorted (their
+    order does not matter).
     """
 
     train: np.ndarray
@@ -654,16 +672,59 @@ def _stratify(labels, indices, enabled):
     return labels[indices] if enabled else None
 
 
-def train_val_test_split(samples, test_size=0.2, val_size=0.2, seed=42,
-                         stratify_by_sample=True):
-    """Random frame-level split into train / val / test.
+def _count(fraction, total):
+    """`fraction` of `total`, rounded half up, at least 1."""
+    return max(1, int(fraction * total + 0.5))
 
-    The test set is taken first (`test_size` of all pairs); validation is
-    `val_size` of the remainder. `samples` (the video id of every pair) is
-    used to stratify so each split holds the same share of each video.
-    The training indices stay in random order (see `Split`).
+
+def _draw_samples(candidates, fraction, rng, purpose):
+    """Draw `fraction` of the sample (embryo) ids `candidates` with `rng`,
+    at least one, and leave at least one for training. Sorted ids."""
+    count = _count(fraction, len(candidates))
+    if count >= len(candidates):
+        raise ValueError(
+            f"{len(candidates)} embryo(s) are too few to take "
+            f"{fraction:.0%} of them for {purpose} and keep at least one "
+            "for training; with very few embryos (e.g. the two videos of "
+            "the first thesis version) set split.group_by_sample: false")
+    return np.sort(rng.choice(candidates, size=count, replace=False))
+
+
+def _group_split(samples, test_size, val_size, seed):
+    """Whole samples (embryos) go to one subset."""
+    rng = np.random.default_rng(seed)
+    embryos = np.unique(samples)
+    test_ids = _draw_samples(embryos, test_size, rng, "testing")
+    rest = np.setdiff1d(embryos, test_ids)
+    val_ids = (_draw_samples(rest, val_size, rng, "validation")
+               if val_size > 0 else rest[:0])
+    test = np.flatnonzero(np.isin(samples, test_ids))
+    val = np.flatnonzero(np.isin(samples, val_ids))
+    train = np.flatnonzero(
+        ~np.isin(samples, np.concatenate([test_ids, val_ids])))
+    # Random training order: with shuffle=False it is the batch order.
+    return Split(rng.permutation(train), val, test)
+
+
+def train_val_test_split(samples, test_size=0.2, val_size=0.2, seed=42,
+                         stratify_by_sample=True, group_by_sample=True):
+    """Split the pairs into train / val / test.
+
+    `samples` is the embryo (video) id of every pair. With
+    `group_by_sample`, whole embryos go to one subset: `test_size` of the
+    embryos for testing and `val_size` of the remaining embryos for
+    validation (rounded half up, at least one each), so all time points of
+    an embryo stay together. Without it, the split is frame-level (first
+    thesis version): `test_size` of all pairs for testing and `val_size` of
+    the remainder for validation, stratified by video if
+    `stratify_by_sample`. The training indices stay in random order (see
+    `Split`).
     """
     samples = np.asarray(samples)
+    if group_by_sample:
+        split = _group_split(samples, test_size, val_size, seed)
+        logger.info("Split sizes: %s", split.sizes())
+        return split
     indices = np.arange(len(samples))
     trainval, test = train_test_split(
         indices, test_size=test_size, random_state=seed,
@@ -681,31 +742,49 @@ def train_val_test_split(samples, test_size=0.2, val_size=0.2, seed=42,
     return split
 
 
-def leave_one_embryo_out_splits(samples, val_size=0.2, seed=42):
-    """One split per video: test on that video, train/val on the others.
+def cross_validation_splits(samples, folds=5, val_size=0.2, seed=42,
+                            group_by_sample=True):
+    """k-fold cross-validation by embryo: {fold number: Split}.
 
-    Frames of a time-lapse video are highly correlated, so this measures
-    generalisation to an unseen embryo. Validation frames come from the
-    training video(s).
+    The embryos are shuffled with `seed` and dealt into `folds` near-equal
+    groups; each group is the test set of one fold, so every embryo is
+    tested exactly once. With one fold per embryo the embryos are taken in
+    order, which is leave-one-embryo-out (with group_by_sample False the
+    splits are those of version 0.3.0). Validation: `val_size` of each
+    fold's training embryos (group_by_sample) or of its training frames.
     """
     samples = np.asarray(samples)
-    folds = {}
-    for held_out in np.unique(samples).tolist():
-        test = np.flatnonzero(samples == held_out)
-        trainval = np.flatnonzero(samples != held_out)
-        if val_size > 0:
-            train, val = train_test_split(
-                trainval, test_size=val_size, random_state=seed
-            )
-        else:
+    embryos = np.unique(samples)
+    if not 2 <= folds <= len(embryos):
+        raise ValueError(
+            f"folds must be between 2 and the number of embryos "
+            f"({len(embryos)}), not {folds}")
+    if folds == len(embryos):
+        groups = [embryos[i:i + 1] for i in range(len(embryos))]
+    else:
+        shuffled = np.random.default_rng(seed).permutation(embryos)
+        groups = [np.sort(group) for group in np.array_split(shuffled, folds)]
+    splits = {}
+    for fold, test_ids in enumerate(groups, start=1):
+        test = np.flatnonzero(np.isin(samples, test_ids))
+        trainval = np.flatnonzero(~np.isin(samples, test_ids))
+        if val_size <= 0:
             # Random training order, as train_test_split would give.
             train = np.random.default_rng(seed).permutation(trainval)
             val = np.array([], dtype=int)
-        folds[held_out] = Split(np.asarray(train), np.sort(val), test)
-        logger.info(
-            "Leave-out sample %d: %s", held_out, folds[held_out].sizes()
-        )
-    return folds
+        elif group_by_sample:
+            rng = np.random.default_rng([seed, fold])
+            val_ids = _draw_samples(np.unique(samples[trainval]), val_size,
+                                    rng, "validation")
+            val = np.flatnonzero(np.isin(samples, val_ids))
+            train = rng.permutation(np.setdiff1d(trainval, val))
+        else:
+            train, val = train_test_split(trainval, test_size=val_size,
+                                          random_state=seed)
+        splits[fold] = Split(np.asarray(train), np.sort(val), test)
+        logger.info("Cross-validation fold %d, test embryos %s: %s", fold,
+                    test_ids.tolist(), splits[fold].sizes())
+    return splits
 
 
 def split_table(dataset, split):
@@ -755,13 +834,16 @@ def load_split(dataset, path):
 # %% Notebook cell 12
 split = train_val_test_split(dataset.samples, test_size=cfg.split.test_size,
                              val_size=cfg.split.val_size, seed=cfg.seed,
-                             stratify_by_sample=cfg.split.stratify_by_sample)
+                             stratify_by_sample=cfg.split.stratify_by_sample,
+                             group_by_sample=cfg.split.group_by_sample)
 save_split(dataset, split, OUTPUT_DIR + '/split.csv')
 
 X_train, y_train = dataset.images[split.train], dataset.masks[split.train]
 X_val, y_val = dataset.images[split.val], dataset.masks[split.val]
 X_test, y_test = dataset.images[split.test], dataset.masks[split.test]
 print(split.sizes())
+print('Embryos per subset:', {part: len(np.unique(dataset.samples[getattr(split, part)]))
+                              for part in ('train', 'val', 'test')})
 
 # ==== Class imbalance
 
@@ -1478,14 +1560,14 @@ def select_threshold(y_true, y_prob, thresholds, metric="dice"):
 
 # ==============================================================================
 # zona_pellucida/experiments.py
-# Unweighted vs weighted runs and the leave-one-embryo-out check.
+# Unweighted vs weighted runs and the cross-validation by embryo.
 # ==============================================================================
 
 
 RESULT_COLUMNS = [
-    "framework", "run", "loss", "held_out_sample", "threshold_source", "threshold",
-    "accuracy", "precision", "recall", "f1", "iou", "dice", "dice_std",
-    "iou_per_image", "iou_per_image_std", "tn", "fp", "fn", "tp",
+    "framework", "run", "loss", "fold", "test_samples", "threshold_source",
+    "threshold", "accuracy", "precision", "recall", "f1", "iou", "dice",
+    "dice_std", "iou_per_image", "iou_per_image_std", "tn", "fp", "fn", "tp",
     "test_loss", "best_epoch",
     "epochs_trained", "w_background", "w_zona",
 ]
@@ -1505,7 +1587,9 @@ class RunResult:
     test_metrics: list
     val_threshold: float = None
     threshold_table: pd.DataFrame = None
-    held_out_sample: int = None
+    fold: int = None
+    test_samples: str = ""
+    per_image: pd.DataFrame = None
 
 
 def tensorboard_log_dir(output_dir, run_name):
@@ -1530,8 +1614,54 @@ def load_history(path):
         return pickle.load(f)
 
 
+def per_image_table(dataset, probabilities, thresholds):
+    """Dice and IoU of every image at every (source, threshold) pair.
+
+    Their means are the `dice` and `iou_per_image` columns of the results.
+    """
+    y_true = binarize(dataset.masks, 0.5)
+    tables = []
+    for source, threshold in thresholds:
+        y_pred = binarize(probabilities, threshold)
+        tables.append(pd.DataFrame({
+            "image_file": dataset.image_files,
+            "sample": dataset.samples,
+            "frame": dataset.frames,
+            "threshold_source": source,
+            "threshold": float(threshold),
+            "dice": per_image_scores(y_true, y_pred, dice_coefficient),
+            "iou": per_image_scores(y_true, y_pred, iou_coefficient),
+        }))
+    return pd.concat(tables, ignore_index=True)
+
+
+def summarize_by_time(per_image):
+    """Per loss, threshold source and time point (`frame`, in hours): the
+    number of images and the mean and (population) standard deviation of
+    the per-image Dice and IoU."""
+    def spread(values):
+        return values.std(ddof=0)
+
+    return (per_image.groupby(["loss", "threshold_source", "frame"])
+            .agg(n=("dice", "size"), dice=("dice", "mean"),
+                 dice_std=("dice", spread), iou=("iou", "mean"),
+                 iou_std=("iou", spread))
+            .reset_index())
+
+
+def save_time_summary(results, path):
+    """Write summarize_by_time of the per-image scores of `results`."""
+    table = summarize_by_time(
+        pd.concat([r.per_image for r in results], ignore_index=True))
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    table.to_csv(path, index=False)
+    logger.info("Saved the scores per time point to %s", path)
+    return table
+
+
 def run_experiment(loss, dataset, split, cfg, backend, name=None,
-                   held_out_sample=None, keep_model=True):
+                   fold=None, keep_model=True):
     """Train one model from scratch and evaluate it on the test split.
 
     Every run starts from a fresh session seeded with `cfg.seed`, so the
@@ -1595,13 +1725,21 @@ def run_experiment(loss, dataset, split, cfg, backend, name=None,
             row["threshold_source"], row["accuracy"], row["precision"],
             row["recall"], row["f1"], row["iou"], row["dice"],
         )
+    per_image = per_image_table(test, test_prob, thresholds)
+    per_image.insert(0, "run", name)
+    per_image.insert(1, "loss", loss)
+    per_image.insert(2, "fold", fold)
+    per_image_path = output_dir / "per_image" / f"{name}.csv"
+    per_image_path.parent.mkdir(parents=True, exist_ok=True)
+    per_image.to_csv(per_image_path, index=False)
+    test_samples = " ".join(str(s) for s in np.unique(test.samples))
     return RunResult(
         framework=backend.name, name=name, loss=loss, model=model if keep_model else None,
         model_path=model_path,
         history=history, best_epoch=best_epoch, class_weights=class_weights,
         test_scores=test_scores, test_metrics=test_metrics,
         val_threshold=val_threshold, threshold_table=threshold_table,
-        held_out_sample=held_out_sample,
+        fold=fold, test_samples=test_samples, per_image=per_image,
     )
 
 
@@ -1617,7 +1755,8 @@ def results_table(results):
                 "framework": result.framework,
                 "run": result.name,
                 "loss": result.loss,
-                "held_out_sample": result.held_out_sample,
+                "fold": result.fold,
+                "test_samples": result.test_samples,
                 "test_loss": result.test_scores["loss"],
                 "best_epoch": result.best_epoch,
                 "epochs_trained": len(result.history["loss"]),
@@ -1646,35 +1785,44 @@ def run_comparison(dataset, split, cfg, backend):
         list(results.values()),
         Path(cfg.output_dir) / "results_comparison.csv",
     )
+    save_time_summary(list(results.values()),
+                      Path(cfg.output_dir) / "results_by_time.csv")
     return results, table
 
 
-def run_leave_one_embryo_out(dataset, cfg, backend):
-    """Train on one video, test on the other (robustness check only)."""
-    folds = leave_one_embryo_out_splits(
-        dataset.samples, cfg.split.val_size, cfg.seed
+def run_cross_validation(dataset, cfg, backend):
+    """k-fold cross-validation by embryo: every embryo is tested once.
+
+    A robustness check next to the main split, whose test metrics depend
+    on which embryos were drawn for testing.
+    """
+    folds = cross_validation_splits(
+        dataset.samples, cfg.cross_validation.folds, cfg.split.val_size,
+        cfg.seed, cfg.split.group_by_sample,
     )
     output_dir = Path(cfg.output_dir)
     results = []
-    for held_out, split in folds.items():
-        save_split(dataset, split,
-                   output_dir / "splits" / f"loeo_test_sample{held_out}.csv")
-        for loss in cfg.leave_one_embryo_out.runs:
+    for fold, split in folds.items():
+        save_split(dataset, split, output_dir / "splits" / f"cv_fold{fold}.csv")
+        for loss in cfg.cross_validation.runs:
             results.append(run_experiment(
                 loss, dataset, split, cfg, backend,
-                name=f"loeo_test_sample{held_out}_{loss}",
-                held_out_sample=held_out, keep_model=False,
+                name=f"cv_fold{fold}_{loss}", fold=fold, keep_model=False,
             ))
-    table = save_results(results, output_dir / "leave_one_embryo_out.csv")
+    table = save_results(results, output_dir / "cross_validation.csv")
+    summarize_cross_validation(table).to_csv(
+        output_dir / "cross_validation_summary.csv", index=False)
+    save_time_summary(results, output_dir / "cross_validation_by_time.csv")
     return results, table
 
 
-def summarize_leave_one_embryo_out(table):
-    """Mean and std over the held-out videos, per loss and threshold."""
+def summarize_cross_validation(table):
+    """Mean and standard deviation over the folds, per loss and threshold."""
     metrics = ["accuracy", "precision", "recall", "f1", "iou", "dice"]
-    return table.groupby(["loss", "threshold_source"])[metrics].agg(
-        ["mean", "std"]
-    )
+    summary = table.groupby(["loss", "threshold_source"])[metrics].agg(
+        ["mean", "std"])
+    summary.columns = [f"{metric}_{stat}" for metric, stat in summary.columns]
+    return summary.reset_index()
 
 # %% Notebook cell 24
 # Unweighted baseline: binary cross-entropy (as in the thesis)
@@ -1688,11 +1836,14 @@ results['weighted'] = run_experiment('weighted', dataset, split, cfg, backend)
 # %% Notebook cell 26
 # Test-set comparison of both runs for Chapter 5 (saved to OUTPUT_DIR/results_comparison.csv)
 comparison = save_results(list(results.values()), OUTPUT_DIR + '/results_comparison.csv')
+# Mean per-image Dice and IoU per time point (frame = hours after insemination)
+time_table = save_time_summary(list(results.values()), OUTPUT_DIR + '/results_by_time.csv')
 # The configuration and environment that produced these results
 save_config(cfg, OUTPUT_DIR + '/config_used.yaml')
 log_versions(backend, OUTPUT_DIR + '/environment.yaml')
 print(comparison[['run', 'threshold_source', 'threshold', 'accuracy', 'precision',
                   'recall', 'f1', 'iou', 'dice', 'best_epoch', 'epochs_trained']].to_string(index=False))
+print(time_table.round(4).to_string(index=False))
 
 # %% Notebook cell 28
 # Load the trained model and training history of FIGURE_RUN
@@ -2009,12 +2160,13 @@ prediction = (backend.predict(model, test_img[None, ...])[0, :, :, 0] > THRESHOL
 plot_distance_transform_overlay(test_img, ground_truth, prediction, alpha=0.3,
                                 save_path=FIG_DIR + '/distance_transform_overlay.png')
 
-# ==== Leave-one-embryo-out (robustness check)
+# ==== Cross-validation by embryo (robustness check)
 
 # %% Notebook cell 47
-if RUN_LEAVE_ONE_EMBRYO_OUT:
-    loeo_results, loeo_table = run_leave_one_embryo_out(dataset, cfg, backend)
-    print(loeo_table[['run', 'held_out_sample', 'threshold_source', 'threshold', 'accuracy',
-                      'precision', 'recall', 'f1', 'iou', 'dice']].to_string())
-    loeo_summary = summarize_leave_one_embryo_out(loeo_table)
-    print(loeo_summary.to_string())
+if RUN_CROSS_VALIDATION:
+    cv_results, cv_table = run_cross_validation(dataset, cfg, backend)
+    print(cv_table[['run', 'fold', 'test_samples', 'threshold_source', 'threshold', 'accuracy',
+                    'precision', 'recall', 'f1', 'iou', 'dice']].to_string())
+    print(summarize_cross_validation(cv_table).round(4).to_string(index=False))
+    # Per time point, over all embryos (each tested once)
+    print(pd.read_csv(OUTPUT_DIR + '/cross_validation_by_time.csv').round(4).to_string(index=False))
