@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- **Batch-normalisation momentum 0.9** in both frameworks (it was the Keras default 0.99; PyTorch now 0.1 instead of 0.01). Batch normalisation predicts (validation, test) with running averages of the batch statistics, and momentum 0.99 moves them only 1% towards each training batch. With 57 training images there are 4 batches per epoch, and after 100 epochs about 2% of the initial variance (1.0) was still left, while the true variance in the first layer is about 0.001. In the first Kaggle run the validation scores therefore stayed near zero for about 90 epochs, and the PyTorch models reached a test Dice of 0.14 (unweighted) and 0.42 (weighted); the same models give a Dice of 0.66 and 0.70 on the validation images when they normalise with the statistics of those images. With 0.9 the running statistics follow the data within about 20 epochs. The training itself is unchanged (it normalises with the statistics of each batch); the statistics used for prediction change, and with them the kept epoch and every test score.
+
 ## 0.4.0
 
 - **New data:** 89 labelled images of 30 embryos from three culture dishes, each embryo at 25, 69 and 117 h after insemination, instead of the 205 frames of two time-lapse videos. Files are named `embryo<dish><P>_<hours>h.png` and `..._mask.png` (new default `data.image_pattern` / `mask_pattern`; Colab folder `MyDrive/g_embryos_dataset`).

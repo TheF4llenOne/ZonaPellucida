@@ -12,7 +12,7 @@ Semantic segmentation of the zona pellucida in time-lapse images of human embryo
 ### Model
 
 - Input: 512x512 grayscale image. Output: one zona pellucida probability per pixel (the PyTorch model outputs logits, with the sigmoid inside the loss).
-- Contracting path of five blocks of two 3x3 convolutions (32 to 512 filters, ReLU, batch normalisation, max pooling); expanding path of four 2x2 transposed convolutions with skip connections; dropout 0.5; 1x1 output convolution.
+- Contracting path of five blocks of two 3x3 convolutions (32 to 512 filters, ReLU, batch normalisation with momentum 0.9, max pooling); expanding path of four 2x2 transposed convolutions with skip connections; dropout 0.5; 1x1 output convolution.
 - Loss: binary cross-entropy (baseline) or frequency-weighted binary cross-entropy. Adam (learning rate 0.001), batch size 16, 100 epochs; the weights of the epoch with the best validation IoU are kept (optional early stopping in the config).
 
 ### Code structure
