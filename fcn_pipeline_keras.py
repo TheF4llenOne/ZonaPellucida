@@ -1155,13 +1155,18 @@ def training_metrics(threshold=0.5):
 # ==============================================================================
 
 
-# Batch normalisation predicts (validation, test) with running averages of the
-# batch statistics. The Keras default momentum 0.99 moves them only 1% towards
-# each training batch: with 57 training images in batches of 16 (4 batches per
-# epoch) they still largely reflect their initial values (mean 0, variance 1)
-# after 100 epochs, and the predictions are poor although the training itself
-# is unaffected. With 0.9 (the PyTorch default) they follow the data within
-# about 20 epochs. Training does not use them: the weights are the same.
+# Batch normalisation normalises with the statistics of each batch during
+# training but predicts (validation, test) with running averages of them,
+# which start at mean 0 and variance 1. The Keras default momentum 0.99
+# moves them only 1% towards each batch: with 57 training images in batches
+# of 16 (4 batches per epoch), 0.99^400 = 1.8% of the initial variance is
+# still in them after 100 epochs. That is negligible in most layers, but in
+# about half of the channels of the first layer the variance of the data is
+# below 0.002, so there the running variance is still about ten times too
+# large or more, and the predictions are poor. With 0.9 (PyTorch's default,
+# written there as momentum 0.1) they follow the data within about 20
+# epochs. The weights trained in each epoch do not depend on the momentum;
+# the validation scores, and with them the kept epoch, do.
 BN_MOMENTUM = 0.9
 
 

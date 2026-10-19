@@ -70,8 +70,9 @@ train:
     # false = train all `epochs` (as in the thesis), then restore the best
     # epoch. true = stop when `monitor` has not improved for `patience`
     # epochs; epochs before `start_from_epoch` are ignored (in the saved run
-    # of the original notebook, not the thesis run, the unweighted model only
-    # learned the zona from about epoch 35).
+    # of the original notebook, not the thesis run, the validation accuracy of
+    # the unweighted model only rose above the all-background level from
+    # about epoch 35).
     enabled: false
     patience: 20
     start_from_epoch: 40
