@@ -763,6 +763,51 @@ def leave_one_embryo_out_splits(samples, val_size=0.2, seed=42):
     return folds
 
 
+def cross_validation_splits(samples, folds=5, val_size=0.2, seed=42,
+                            group_by_sample=True):
+    """k-fold cross-validation by embryo: {fold number: Split}.
+
+    The embryos are shuffled with `seed` and dealt into `folds` near-equal
+    groups; each group is the test set of one fold, so every embryo is
+    tested exactly once. With one fold per embryo the embryos are taken in
+    order, which is leave-one-embryo-out (with group_by_sample False the
+    splits are those of version 0.3.0). Validation: `val_size` of each
+    fold's training embryos (group_by_sample) or of its training frames.
+    """
+    samples = np.asarray(samples)
+    embryos = np.unique(samples)
+    if not 2 <= folds <= len(embryos):
+        raise ValueError(
+            f"folds must be between 2 and the number of embryos "
+            f"({len(embryos)}), not {folds}")
+    if folds == len(embryos):
+        groups = [embryos[i:i + 1] for i in range(len(embryos))]
+    else:
+        shuffled = np.random.default_rng(seed).permutation(embryos)
+        groups = [np.sort(group) for group in np.array_split(shuffled, folds)]
+    splits = {}
+    for fold, test_ids in enumerate(groups, start=1):
+        test = np.flatnonzero(np.isin(samples, test_ids))
+        trainval = np.flatnonzero(~np.isin(samples, test_ids))
+        if val_size <= 0:
+            # Random training order, as train_test_split would give.
+            train = np.random.default_rng(seed).permutation(trainval)
+            val = np.array([], dtype=int)
+        elif group_by_sample:
+            rng = np.random.default_rng([seed, fold])
+            val_ids = _draw_samples(np.unique(samples[trainval]), val_size,
+                                    rng, "validation")
+            val = np.flatnonzero(np.isin(samples, val_ids))
+            train = rng.permutation(np.setdiff1d(trainval, val))
+        else:
+            train, val = train_test_split(trainval, test_size=val_size,
+                                          random_state=seed)
+        splits[fold] = Split(np.asarray(train), np.sort(val), test)
+        logger.info("Cross-validation fold %d, test embryos %s: %s", fold,
+                    test_ids.tolist(), splits[fold].sizes())
+    return splits
+
+
 def split_table(dataset, split):
     """One row per pair: filenames, sample, frame, its split and its
     position within the split (the training order)."""
