@@ -2229,7 +2229,7 @@ prediction = (backend.predict(model, test_img[None, ...])[0, :, :, 0] > THRESHOL
 plot_distance_transform_overlay(test_img, ground_truth, prediction, alpha=0.3,
                                 save_path=FIG_DIR + '/distance_transform_overlay.png')
 
-# ==== Leave-one-embryo-out (robustness check)
+# ==== Cross-validation by embryo (robustness check)
 
 # %% Notebook cell 47
 if RUN_CROSS_VALIDATION:
