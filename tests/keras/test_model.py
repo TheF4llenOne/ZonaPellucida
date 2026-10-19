@@ -67,8 +67,7 @@ def thesis_fcn_8(IMG_HEIGHT, IMG_WIDTH, IMG_CHANNELS):
     return Model(inputs=inputs, outputs=outputs)
 
 
-def _signature(model):
-    ignored = {"name"}
+def _signature(model, ignored=("name",)):
     return [
         (type(layer).__name__, layer.count_params(),
          {k: v for k, v in layer.get_config().items() if k not in ignored})
@@ -77,9 +76,22 @@ def _signature(model):
 
 
 def test_architecture_is_unchanged():
+    """The thesis model, apart from the batch-norm momentum."""
     new, old = fcn_8(64, 64, 1), thesis_fcn_8(64, 64, 1)
     assert new.count_params() == old.count_params()
-    assert _signature(new) == _signature(old)
+    assert (_signature(new, ("name", "momentum"))
+            == _signature(old, ("name", "momentum")))
+
+
+def test_batch_norm_momentum():
+    """0.9 instead of the Keras default 0.99 of the thesis model, so the
+    statistics used for prediction follow the data (see BN_MOMENTUM)."""
+    def momenta(model):
+        return {layer.get_config()["momentum"] for layer in model.layers
+                if isinstance(layer, BatchNormalization)}
+
+    assert momenta(fcn_8(32, 32, 1)) == {0.9}
+    assert momenta(thesis_fcn_8(32, 32, 1)) == {0.99}
 
 
 def test_output_is_a_probability_map():

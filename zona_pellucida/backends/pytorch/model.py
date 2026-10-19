@@ -4,9 +4,10 @@
 U-Net, not the FCN-8s of Long et al.)
 
 Same layers, order (conv -> ReLU -> batch norm), skip connections and
-dropout. Initialisation and batch-norm settings follow the Keras defaults
-so both frameworks start from the same kind of network. The network
-returns logits; the sigmoid is applied in the loss and in `predict`.
+dropout. Initialisation and batch-norm settings follow the Keras model
+(Keras defaults, except the batch-norm momentum 0.9) so both frameworks
+start from the same kind of network. The network returns logits; the
+sigmoid is applied in the loss and in `predict`.
 """
 
 import math
@@ -14,9 +15,10 @@ import math
 import torch
 from torch import nn
 
-# Keras BatchNormalization: momentum 0.99 (PyTorch convention: 0.01),
-# epsilon 1e-3.
-BN_MOMENTUM = 0.01
+# The Keras model's BatchNormalization: momentum 0.9 (PyTorch convention:
+# 0.1, the PyTorch default; see BN_MOMENTUM in backends/keras/model.py) and
+# the Keras default epsilon 1e-3.
+BN_MOMENTUM = 0.1
 BN_EPSILON = 1e-3
 
 

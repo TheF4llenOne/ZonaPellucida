@@ -30,8 +30,9 @@ def test_keras_initialisation():
     for module in model.modules():
         if isinstance(module, (torch.nn.Conv2d, torch.nn.ConvTranspose2d)):
             assert torch.count_nonzero(module.bias) == 0
+    # Keras epsilon 1e-3; momentum 0.1, i.e. Keras 0.9 (see BN_MOMENTUM)
     bn = model.conv1[0][2]
-    assert (bn.eps, bn.momentum) == (1e-3, 0.01)
+    assert (bn.eps, bn.momentum) == (1e-3, 0.1)
 
 
 def _layers_with_weights(keras_model):

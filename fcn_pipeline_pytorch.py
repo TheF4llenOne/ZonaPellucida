@@ -1028,9 +1028,10 @@ plt.show()
 # ==============================================================================
 
 
-# Keras BatchNormalization: momentum 0.99 (PyTorch convention: 0.01),
-# epsilon 1e-3.
-BN_MOMENTUM = 0.01
+# The Keras model's BatchNormalization: momentum 0.9 (PyTorch convention:
+# 0.1, the PyTorch default; see BN_MOMENTUM in backends/keras/model.py) and
+# the Keras default epsilon 1e-3.
+BN_MOMENTUM = 0.1
 BN_EPSILON = 1e-3
 
 
