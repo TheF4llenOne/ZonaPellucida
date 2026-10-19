@@ -78,7 +78,7 @@ Tests of a framework that is not installed are skipped. After changing the noteb
 
 ### Data
 
-The first thesis version used 205 frames of two time-lapse videos (105 and 100 frames of two embryos). Consecutive frames are nearly identical, so a frame-level split put near-duplicates of the test frames into the training set, and the model overfitted to the two embryos. The current dataset has 89 labelled images of 30 embryos from three culture dishes, each embryo imaged at 25, 69 and 117 hours after insemination (one 117 h image left out: the embryo is mostly outside the picture), and the split and the cross-validation are by embryo. A fourth dish (8 embryos) is not used yet: only the outer edge of its zona pellucida was traced.
+The first thesis version used 205 frames of two time-lapse videos (105 and 100 frames of two embryos). Consecutive frames are nearly identical, so a frame-level split put near-duplicates of the test frames into the training set, and the model overfitted to the two embryos. The current dataset has 89 labelled images of 30 embryos from three culture dishes, each embryo imaged at 25, 69 and 117 hours after insemination (one 117 h image left out: the embryo is mostly outside the picture), and the split and the cross-validation are by embryo. A further dish (dish 3, 8 embryos) is not used yet: only the outer edge of its zona pellucida was traced.
 
 To rerun the first version on the 205 video frames, set `data.image_pattern: '^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$'`, `data.mask_pattern: '^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$'`, `split.group_by_sample: false` and `cross_validation.folds: 2` (leave-one-embryo-out with the splits of version 0.3.0).
 

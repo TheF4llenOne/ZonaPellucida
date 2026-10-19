@@ -4,7 +4,7 @@
 
 - **New data:** 89 labelled images of 30 embryos from three culture dishes, each embryo at 25, 69 and 117 h after insemination, instead of the 205 frames of two time-lapse videos. Files are named `embryo<dish><P>_<hours>h.png` and `..._mask.png` (new default `data.image_pattern` / `mask_pattern`; Colab folder `MyDrive/g_embryos_dataset`).
 - **Split by embryo** (`split.group_by_sample: true`, new default): 6 / 5 / 19 embryos for test / validation / training; all time points of an embryo stay in one subset.
-- **5-fold cross-validation by embryo** (`cross_validation`, replacing `leave_one_embryo_out`; `RUN_CROSS_VALIDATION` in the notebook): every embryo is tested once. With one fold per embryo it is leave-one-embryo-out with the splits of 0.3.0. Outputs `cross_validation.csv`, `cross_validation_summary.csv`, `cross_validation_by_time.csv`, `splits/cv_fold*.csv`.
+- **5-fold cross-validation by embryo** (`cross_validation`, replacing `leave_one_embryo_out`; `RUN_CROSS_VALIDATION` in the notebook): every embryo is tested once. With one fold per embryo it is leave-one-embryo-out; on the two videos with `split.group_by_sample: false` it gives the splits of 0.3.0. Outputs `cross_validation.csv`, `cross_validation_summary.csv`, `cross_validation_by_time.csv`, `splits/cv_fold*.csv`.
 - **Per-image scores** (`per_image/<run>.csv`) and the scores per time point (`results_by_time.csv`).
 - The `held_out_sample` column of the result tables is replaced by `fold` and `test_samples` (the test embryos).
 
