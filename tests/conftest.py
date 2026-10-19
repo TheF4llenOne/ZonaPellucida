@@ -29,10 +29,8 @@ def backend(framework):
 
 @pytest.fixture(scope="session")
 def synthetic_dirs(tmp_path_factory):
-    """(image_dir, mask_dir) with 12 + 10 synthetic pairs."""
-    return make_synthetic_dataset(
-        tmp_path_factory.mktemp("data"), frames_per_sample=(12, 10)
-    )
+    """(image_dir, mask_dir): 10 synthetic embryos at 25, 69 and 117 h."""
+    return make_synthetic_dataset(tmp_path_factory.mktemp("data"))
 
 
 @pytest.fixture

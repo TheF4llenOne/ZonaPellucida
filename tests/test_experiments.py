@@ -67,7 +67,7 @@ def test_leave_one_embryo_out(small_cfg, backend):
     dataset = load_dataset_from_config(small_cfg.data)
     small_cfg.leave_one_embryo_out.runs = ["unweighted"]
     results, table = run_leave_one_embryo_out(dataset, small_cfg, backend)
-    assert sorted(table["held_out_sample"].unique()) == [1, 2]
+    assert sorted(table["held_out_sample"].unique()) == list(range(101, 111))
     # Each fold is evaluated on exactly the frames of its held-out video.
     size = small_cfg.data.size
     for result in results:

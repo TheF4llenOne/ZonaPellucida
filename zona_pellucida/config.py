@@ -20,11 +20,11 @@ DEFAULT_CONFIG_PATH = (
 
 @dataclass
 class DataConfig:
-    image_dir: str = "/content/drive/MyDrive/images"
-    mask_dir: str = "/content/drive/MyDrive/masks"
-    image_pattern: str = r"^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$"
+    image_dir: str = "/content/drive/MyDrive/g_embryos_dataset/images"
+    mask_dir: str = "/content/drive/MyDrive/g_embryos_dataset/masks"
+    image_pattern: str = r"^embryo(?P<sample>\d+)_(?P<frame>\d+)h\.png$"
     mask_pattern: str = (
-        r"^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$"
+        r"^embryo(?P<sample>\d+)_(?P<frame>\d+)h_mask\.png$"
     )
     size: int = 512
     mask_threshold: float = 0.5
@@ -34,6 +34,7 @@ class DataConfig:
 class SplitConfig:
     test_size: float = 0.2
     val_size: float = 0.2
+    group_by_sample: bool = True
     stratify_by_sample: bool = True
 
 

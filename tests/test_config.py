@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from zona_pellucida.config import Config, load_config, merge_dicts
@@ -12,6 +14,19 @@ def test_yaml_matches_dataclass_defaults():
 def test_default_patterns_match_loader():
     assert Config().data.image_pattern == IMAGE_PATTERN
     assert Config().data.mask_pattern == MASK_PATTERN
+
+
+def test_default_names_are_the_embryo_images():
+    data = Config().data
+    for pattern, name in ((data.image_pattern, "embryo208_25h.png"),
+                          (data.mask_pattern, "embryo208_25h_mask.png")):
+        assert re.match(pattern, name).groupdict() == {"sample": "208",
+                                                       "frame": "25"}
+    assert re.match(data.image_pattern, "embryo208_25h_mask.png") is None
+
+
+def test_split_by_embryo_is_the_default():
+    assert Config().split.group_by_sample is True
 
 
 def test_overrides_are_merged_recursively():

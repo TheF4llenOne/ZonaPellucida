@@ -64,8 +64,8 @@ FRAMEWORK = 'pytorch'
 DETERMINISTIC_OPS = True  # stop (naming the op) if an op is not deterministic
 
 DRIVE_DIR = '/content/drive/MyDrive'
-IMAGE_DIR = DRIVE_DIR + '/images'
-MASK_DIR = DRIVE_DIR + '/masks'
+IMAGE_DIR = DRIVE_DIR + '/g_embryos_dataset/images'  # embryo208_25h.png ...
+MASK_DIR = DRIVE_DIR + '/g_embryos_dataset/masks'  # embryo208_25h_mask.png ...
 REPO_DIR = DRIVE_DIR + '/ZonaPellucida'  # copy of this repository (code)
 OUTPUT_DIR = DRIVE_DIR + '/ZonaPellucida_outputs/' + FRAMEWORK  # figures, tables, models, logs
 
@@ -108,11 +108,11 @@ DEFAULT_CONFIG_PATH = (
 
 @dataclass
 class DataConfig:
-    image_dir: str = "/content/drive/MyDrive/images"
-    mask_dir: str = "/content/drive/MyDrive/masks"
-    image_pattern: str = r"^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$"
+    image_dir: str = "/content/drive/MyDrive/g_embryos_dataset/images"
+    mask_dir: str = "/content/drive/MyDrive/g_embryos_dataset/masks"
+    image_pattern: str = r"^embryo(?P<sample>\d+)_(?P<frame>\d+)h\.png$"
     mask_pattern: str = (
-        r"^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$"
+        r"^embryo(?P<sample>\d+)_(?P<frame>\d+)h_mask\.png$"
     )
     size: int = 512
     mask_threshold: float = 0.5
@@ -122,6 +122,7 @@ class DataConfig:
 class SplitConfig:
     test_size: float = 0.2
     val_size: float = 0.2
+    group_by_sample: bool = True
     stratify_by_sample: bool = True
 
 
@@ -444,8 +445,16 @@ os.makedirs(FIG_DIR, exist_ok=True)
 # ==============================================================================
 
 
-IMAGE_PATTERN = r"^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$"
-MASK_PATTERN = r"^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$"
+# Image and mask names of the G: embryo images: embryo<dish><P>_<hours>h,
+# e.g. embryo208_25h.png and embryo208_25h_mask.png. `sample` is the
+# embryo, `frame` the time point in hours.
+IMAGE_PATTERN = r"^embryo(?P<sample>\d+)_(?P<frame>\d+)h\.png$"
+MASK_PATTERN = r"^embryo(?P<sample>\d+)_(?P<frame>\d+)h_mask\.png$"
+# The 205 video frames of the first thesis version (sample = video).
+VIDEO_IMAGE_PATTERN = r"^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$"
+VIDEO_MASK_PATTERN = (
+    r"^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$"
+)
 
 
 @dataclass
@@ -456,8 +465,8 @@ class SegmentationDataset:
     masks: np.ndarray  # (N, H, W, 1) float32 in {0, 1}
     image_files: list
     mask_files: list
-    samples: np.ndarray  # (N,) video / embryo id
-    frames: np.ndarray  # (N,) frame number within the video
+    samples: np.ndarray  # (N,) embryo (video) id
+    frames: np.ndarray  # (N,) time point in hours (video frame number)
 
     def __len__(self):
         return len(self.images)
@@ -692,7 +701,7 @@ def _group_split(samples, test_size, val_size, seed):
 
 
 def train_val_test_split(samples, test_size=0.2, val_size=0.2, seed=42,
-                         stratify_by_sample=True, group_by_sample=False):
+                         stratify_by_sample=True, group_by_sample=True):
     """Split the pairs into train / val / test.
 
     `samples` is the embryo (video) id of every pair. With
@@ -801,13 +810,16 @@ def load_split(dataset, path):
 # %% Notebook cell 12
 split = train_val_test_split(dataset.samples, test_size=cfg.split.test_size,
                              val_size=cfg.split.val_size, seed=cfg.seed,
-                             stratify_by_sample=cfg.split.stratify_by_sample)
+                             stratify_by_sample=cfg.split.stratify_by_sample,
+                             group_by_sample=cfg.split.group_by_sample)
 save_split(dataset, split, OUTPUT_DIR + '/split.csv')
 
 X_train, y_train = dataset.images[split.train], dataset.masks[split.train]
 X_val, y_val = dataset.images[split.val], dataset.masks[split.val]
 X_test, y_test = dataset.images[split.test], dataset.masks[split.test]
 print(split.sizes())
+print('Embryos per subset:', {part: len(np.unique(dataset.samples[getattr(split, part)]))
+                              for part in ('train', 'val', 'test')})
 
 # ==== Class imbalance
 

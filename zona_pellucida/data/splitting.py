@@ -70,7 +70,7 @@ def _group_split(samples, test_size, val_size, seed):
 
 
 def train_val_test_split(samples, test_size=0.2, val_size=0.2, seed=42,
-                         stratify_by_sample=True, group_by_sample=False):
+                         stratify_by_sample=True, group_by_sample=True):
     """Split the pairs into train / val / test.
 
     `samples` is the embryo (video) id of every pair. With

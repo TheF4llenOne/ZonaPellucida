@@ -13,19 +13,33 @@ def ring_mask(height, width, center, r_inner, r_outer):
     return (dist >= r_inner) & (dist <= r_outer)
 
 
-def make_synthetic_dataset(root, frames_per_sample=(10, 10), width=160,
+# File names of the G: embryo images (default) and of the video frames of
+# the first thesis version; {sample} is the embryo or video, {frame} the
+# time point in hours or the frame number.
+EMBRYO_NAMES = ("embryo{sample}_{frame}h.png",
+                "embryo{sample}_{frame}h_mask.png")
+VIDEO_NAMES = ("sample{sample}_frame_{frame}.png",
+               "sample{sample}_mask_frame_{frame}.png")
+# 10 embryos (dish 1, P01-P10) at the three time points of the G: data
+DEFAULT_FRAMES = {sample: (25, 69, 117) for sample in range(101, 111)}
+
+
+def make_synthetic_dataset(root, frames=None, names=EMBRYO_NAMES, width=160,
                            height=90, seed=0):
     """Write RGB images with a bright ring (the "zona") and 0/255 masks.
 
-    Returns (image_dir, mask_dir).
+    `frames` maps each sample id to its frame numbers (default
+    DEFAULT_FRAMES). Returns (image_dir, mask_dir).
     """
+    frames = DEFAULT_FRAMES if frames is None else frames
     rng = np.random.default_rng(seed)
     image_dir = Path(root) / "images"
     mask_dir = Path(root) / "masks"
     image_dir.mkdir(parents=True, exist_ok=True)
     mask_dir.mkdir(parents=True, exist_ok=True)
-    for sample, n_frames in enumerate(frames_per_sample, start=1):
-        for frame in range(1, n_frames + 1):
+    image_name, mask_name = names
+    for sample, sample_frames in frames.items():
+        for frame in sample_frames:
             center = (height / 2 + rng.uniform(-5, 5),
                       width / 2 + rng.uniform(-5, 5))
             r_outer = rng.uniform(25, 35)
@@ -35,11 +49,9 @@ def make_synthetic_dataset(root, frames_per_sample=(10, 10), width=160,
             gray = np.clip(gray, 0, 255).astype(np.uint8)
             rgb = np.stack([gray] * 3, axis=-1)
             Image.fromarray(rgb).save(
-                image_dir / f"sample{sample}_frame_{frame}.png"
-            )
+                image_dir / image_name.format(sample=sample, frame=frame))
             Image.fromarray((ring * 255).astype(np.uint8)).save(
-                mask_dir / f"sample{sample}_mask_frame_{frame}.png"
-            )
+                mask_dir / mask_name.format(sample=sample, frame=frame))
     return image_dir, mask_dir
 
 

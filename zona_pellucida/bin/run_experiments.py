@@ -50,7 +50,7 @@ def main(config_path=None):
     dataset = load_dataset_from_config(cfg.data)
     split = train_val_test_split(
         dataset.samples, cfg.split.test_size, cfg.split.val_size, cfg.seed,
-        cfg.split.stratify_by_sample,
+        cfg.split.stratify_by_sample, cfg.split.group_by_sample,
     )
     save_split(dataset, split, output_dir / "split.csv")
 

@@ -14,27 +14,29 @@ SAMPLES = np.array([1] * 105 + [2] * 100)
 
 
 def test_sizes_match_thesis_dataset():
-    split = train_val_test_split(SAMPLES, test_size=0.2, val_size=0.2)
+    split = train_val_test_split(SAMPLES, test_size=0.2, val_size=0.2,
+                                 group_by_sample=False)
     assert split.sizes() == {"train": 131, "val": 33, "test": 41}
 
 
 def test_split_is_a_partition():
-    split = train_val_test_split(SAMPLES)
+    split = train_val_test_split(SAMPLES, group_by_sample=False)
     parts = np.concatenate([split.train, split.val, split.test])
     assert sorted(parts) == list(range(len(SAMPLES)))
 
 
 def test_split_is_reproducible_and_seed_dependent():
-    a = train_val_test_split(SAMPLES, seed=42)
-    b = train_val_test_split(SAMPLES, seed=42)
-    c = train_val_test_split(SAMPLES, seed=0)
+    a = train_val_test_split(SAMPLES, seed=42, group_by_sample=False)
+    b = train_val_test_split(SAMPLES, seed=42, group_by_sample=False)
+    c = train_val_test_split(SAMPLES, seed=0, group_by_sample=False)
     np.testing.assert_array_equal(a.test, b.test)
     np.testing.assert_array_equal(a.val, b.val)
     assert not np.array_equal(a.test, c.test)
 
 
 def test_split_is_stratified_by_video():
-    split = train_val_test_split(SAMPLES, stratify_by_sample=True)
+    split = train_val_test_split(SAMPLES, stratify_by_sample=True,
+                                 group_by_sample=False)
     for part in (split.train, split.val, split.test):
         share = np.mean(SAMPLES[part] == 1)
         assert share == pytest.approx(105 / 205, abs=0.03)
@@ -43,14 +45,14 @@ def test_split_is_stratified_by_video():
 def test_training_order_is_random_so_batches_mix_both_videos():
     # With shuffle=False the training order is the batch order of every
     # epoch; sorted indices would give batches of consecutive frames.
-    split = train_val_test_split(SAMPLES, seed=42)
+    split = train_val_test_split(SAMPLES, seed=42, group_by_sample=False)
     assert np.any(np.diff(split.train) < 0)
     batches = [split.train[b:b + 16] for b in range(0, 128, 16)]
     assert all(len(np.unique(SAMPLES[batch])) == 2 for batch in batches)
 
 
 def test_zero_validation_size():
-    split = train_val_test_split(SAMPLES, val_size=0)
+    split = train_val_test_split(SAMPLES, val_size=0, group_by_sample=False)
     assert split.sizes() == {"train": 164, "val": 0, "test": 41}
 
 
@@ -130,3 +132,8 @@ def test_too_few_embryos_raise_a_clear_error():
     # The two videos of the first thesis version, grouped by embryo
     with pytest.raises(ValueError, match="too few"):
         train_val_test_split(SAMPLES, group_by_sample=True)
+
+
+def test_split_by_embryo_is_the_function_default():
+    split = train_val_test_split(EMBRYOS)
+    assert len(_embryos(split, "test")) == 6
