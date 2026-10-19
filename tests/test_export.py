@@ -89,7 +89,7 @@ def test_export_runs_end_to_end(framework, synthetic_dirs, tmp_path):
     outputs = Path(tmp_path / "outputs")
     table = pd.read_csv(outputs / "results_comparison.csv")
     assert set(table["run"]) == {"unweighted", "weighted"}
-    assert (outputs / "leave_one_embryo_out.csv").exists()
+    assert (outputs / "cross_validation.csv").exists()
     assert (outputs / "class_balance.png").exists()
     assert (outputs / "split.csv").exists()
 

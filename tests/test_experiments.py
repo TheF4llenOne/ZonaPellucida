@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -13,7 +15,7 @@ from zona_pellucida.experiments import (
     load_history,
     per_image_table,
     run_comparison,
-    run_leave_one_embryo_out,
+    run_cross_validation,
     summarize_by_time,
 )
 
@@ -77,18 +79,30 @@ def test_runs_are_reproducible(small_cfg, backend):
 
 
 @pytest.mark.slow
-def test_leave_one_embryo_out(small_cfg, backend):
+def test_cross_validation(small_cfg, backend):
     dataset = load_dataset_from_config(small_cfg.data)
-    small_cfg.leave_one_embryo_out.runs = ["unweighted"]
-    results, table = run_leave_one_embryo_out(dataset, small_cfg, backend)
-    assert sorted(table["held_out_sample"].unique()) == list(range(101, 111))
-    # Each fold is evaluated on exactly the frames of its held-out video.
+    small_cfg.cross_validation.runs = ["unweighted"]
+    results, table = run_cross_validation(dataset, small_cfg, backend)
+    assert sorted(table["fold"].unique()) == [1, 2, 3, 4, 5]
+    # Every embryo is tested exactly once
+    tested = [int(s) for r in results for s in r.test_samples.split()]
+    assert sorted(tested) == sorted(np.unique(dataset.samples).tolist())
     size = small_cfg.data.size
+    total = 0
     for result in results:
         m = result.test_metrics[0]
-        n_test = int(np.sum(dataset.samples == result.held_out_sample))
+        ids = [int(s) for s in result.test_samples.split()]
+        n_test = int(np.isin(dataset.samples, ids).sum())
         assert m["tn"] + m["fp"] + m["fn"] + m["tp"] == n_test * size ** 2
+        total += n_test
+    assert total == len(dataset)
     assert all(r.model is None for r in results)
+    outputs = Path(small_cfg.output_dir)
+    for name in ("cross_validation.csv", "cross_validation_summary.csv",
+                 "cross_validation_by_time.csv", "splits/cv_fold1.csv"):
+        assert (outputs / name).exists(), name
+    summary = pd.read_csv(outputs / "cross_validation_summary.csv")
+    assert {"dice_mean", "dice_std"} <= set(summary.columns)
 
 
 def test_results_table_reports_the_loss_weights_used():
@@ -98,10 +112,11 @@ def test_results_table_reports_the_loss_weights_used():
     common = dict(framework="pytorch", model=None, model_path=None,
                   history={"loss": [1.0]}, best_epoch=1,
                   class_weights={0: 0.5, 1: 10.0}, test_scores={"loss": 1.0},
-                  test_metrics=rows)
+                  test_metrics=rows, fold=None, test_samples="101 102")
     table = results_table([RunResult(name="u", loss="unweighted", **common),
                            RunResult(name="w", loss="weighted", **common)])
     assert table["w_zona"].tolist() == [1.0, 10.0]
+    assert table["test_samples"].tolist() == ["101 102"] * 2
 
 
 def _tiny_dataset():

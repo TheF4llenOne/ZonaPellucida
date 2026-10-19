@@ -105,33 +105,6 @@ def train_val_test_split(samples, test_size=0.2, val_size=0.2, seed=42,
     return split
 
 
-def leave_one_embryo_out_splits(samples, val_size=0.2, seed=42):
-    """One split per video: test on that video, train/val on the others.
-
-    Frames of a time-lapse video are highly correlated, so this measures
-    generalisation to an unseen embryo. Validation frames come from the
-    training video(s).
-    """
-    samples = np.asarray(samples)
-    folds = {}
-    for held_out in np.unique(samples).tolist():
-        test = np.flatnonzero(samples == held_out)
-        trainval = np.flatnonzero(samples != held_out)
-        if val_size > 0:
-            train, val = train_test_split(
-                trainval, test_size=val_size, random_state=seed
-            )
-        else:
-            # Random training order, as train_test_split would give.
-            train = np.random.default_rng(seed).permutation(trainval)
-            val = np.array([], dtype=int)
-        folds[held_out] = Split(np.asarray(train), np.sort(val), test)
-        logger.info(
-            "Leave-out sample %d: %s", held_out, folds[held_out].sizes()
-        )
-    return folds
-
-
 def cross_validation_splits(samples, folds=5, val_size=0.2, seed=42,
                             group_by_sample=True):
     """k-fold cross-validation by embryo: {fold number: Split}.

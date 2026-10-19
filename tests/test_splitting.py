@@ -5,7 +5,6 @@ from sklearn.model_selection import train_test_split
 from zona_pellucida.data.loading import load_dataset
 from zona_pellucida.data.splitting import (
     cross_validation_splits,
-    leave_one_embryo_out_splits,
     load_split,
     save_split,
     train_val_test_split,
@@ -56,25 +55,6 @@ def test_training_order_is_random_so_batches_mix_both_videos():
 def test_zero_validation_size():
     split = train_val_test_split(SAMPLES, val_size=0, group_by_sample=False)
     assert split.sizes() == {"train": 164, "val": 0, "test": 41}
-
-
-@pytest.mark.parametrize("val_size", [0.0, 0.2])
-def test_leave_one_embryo_out_training_order_is_random(val_size):
-    folds = leave_one_embryo_out_splits(SAMPLES, val_size=val_size, seed=42)
-    again = leave_one_embryo_out_splits(SAMPLES, val_size=val_size, seed=42)
-    for held_out, split in folds.items():
-        assert np.any(np.diff(split.train) < 0)
-        np.testing.assert_array_equal(split.train, again[held_out].train)
-
-
-def test_leave_one_embryo_out():
-    folds = leave_one_embryo_out_splits(SAMPLES, val_size=0.2)
-    assert sorted(folds) == [1, 2]
-    for held_out, split in folds.items():
-        assert set(SAMPLES[split.test]) == {held_out}
-        assert len(split.test) == np.sum(SAMPLES == held_out)
-        assert held_out not in set(SAMPLES[split.train])
-        assert held_out not in set(SAMPLES[split.val])
 
 
 def test_save_and_load_split(synthetic_dirs, tmp_path):

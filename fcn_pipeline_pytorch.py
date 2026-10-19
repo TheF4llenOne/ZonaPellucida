@@ -75,7 +75,7 @@ SHUFFLE = True  # reshuffle the training images every epoch (see "Shuffling")
 CLASS_WEIGHTING = 'inverse_frequency'  # or 'median_frequency'
 FIGURE_RUN = 'weighted'  # model shown in the qualitative figures
 USE_VAL_THRESHOLD = False  # figures at 0.5 (False) or at the val-selected threshold
-RUN_LEAVE_ONE_EMBRYO_OUT = True
+RUN_CROSS_VALIDATION = True  # 5-fold cross-validation by embryo after the main runs (10 more trainings)
 CONFIG_OVERRIDES = {}  # other values of configs/config.yaml, e.g. {'train': {'batch_size': 8}} (not the settings above, not experiments.runs)
 
 if FRAMEWORK not in ('pytorch', 'keras'):
@@ -180,8 +180,9 @@ class ExperimentsConfig:
 
 
 @dataclass
-class LeaveOneEmbryoOutConfig:
+class CrossValidationConfig:
     enabled: bool = True
+    folds: int = 5
     runs: list = field(default_factory=lambda: ["unweighted", "weighted"])
 
 
@@ -200,8 +201,8 @@ class Config:
     )
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     experiments: ExperimentsConfig = field(default_factory=ExperimentsConfig)
-    leave_one_embryo_out: LeaveOneEmbryoOutConfig = field(
-        default_factory=LeaveOneEmbryoOutConfig
+    cross_validation: CrossValidationConfig = field(
+        default_factory=CrossValidationConfig
     )
 
     def to_dict(self):
@@ -232,13 +233,20 @@ def overlapping_keys(base, overrides, prefix=""):
     return keys
 
 
+# Keys of earlier versions and the keys that replaced them
+RENAMED_KEYS = {"leave_one_embryo_out": "cross_validation"}
+
+
 def _build(cls, values, path="config"):
     """Build dataclass `cls` from a dict, rejecting unknown keys."""
     hints = typing.get_type_hints(cls)
     known = {f.name for f in dataclasses.fields(cls)}
     unknown = set(values) - known
     if unknown:
-        raise KeyError(f"Unknown key(s) in {path}: {sorted(unknown)}")
+        renamed = "".join(
+            f"; {key} was renamed to {RENAMED_KEYS[key]} in version 0.4.0"
+            for key in sorted(unknown) if key in RENAMED_KEYS)
+        raise KeyError(f"Unknown key(s) in {path}: {sorted(unknown)}{renamed}")
     kwargs = {}
     for name, value in values.items():
         hint = hints[name]
@@ -427,7 +435,7 @@ settings = {
     'train': {'epochs': EPOCHS, 'shuffle': SHUFFLE},
     'class_weighting': {'method': CLASS_WEIGHTING},
     'experiments': {'figure_run': FIGURE_RUN},
-    'leave_one_embryo_out': {'enabled': RUN_LEAVE_ONE_EMBRYO_OUT},
+    'cross_validation': {'enabled': RUN_CROSS_VALIDATION},
 }
 clashes = overlapping_keys(settings, CONFIG_OVERRIDES)
 if clashes:
@@ -734,33 +742,6 @@ def train_val_test_split(samples, test_size=0.2, val_size=0.2, seed=42,
     split = Split(np.asarray(train), np.sort(val), np.sort(test))
     logger.info("Split sizes: %s", split.sizes())
     return split
-
-
-def leave_one_embryo_out_splits(samples, val_size=0.2, seed=42):
-    """One split per video: test on that video, train/val on the others.
-
-    Frames of a time-lapse video are highly correlated, so this measures
-    generalisation to an unseen embryo. Validation frames come from the
-    training video(s).
-    """
-    samples = np.asarray(samples)
-    folds = {}
-    for held_out in np.unique(samples).tolist():
-        test = np.flatnonzero(samples == held_out)
-        trainval = np.flatnonzero(samples != held_out)
-        if val_size > 0:
-            train, val = train_test_split(
-                trainval, test_size=val_size, random_state=seed
-            )
-        else:
-            # Random training order, as train_test_split would give.
-            train = np.random.default_rng(seed).permutation(trainval)
-            val = np.array([], dtype=int)
-        folds[held_out] = Split(np.asarray(train), np.sort(val), test)
-        logger.info(
-            "Leave-out sample %d: %s", held_out, folds[held_out].sizes()
-        )
-    return folds
 
 
 def cross_validation_splits(samples, folds=5, val_size=0.2, seed=42,
@@ -1648,14 +1629,14 @@ def select_threshold(y_true, y_prob, thresholds, metric="dice"):
 
 # ==============================================================================
 # zona_pellucida/experiments.py
-# Unweighted vs weighted runs and the leave-one-embryo-out check.
+# Unweighted vs weighted runs and the cross-validation by embryo.
 # ==============================================================================
 
 
 RESULT_COLUMNS = [
-    "framework", "run", "loss", "held_out_sample", "threshold_source", "threshold",
-    "accuracy", "precision", "recall", "f1", "iou", "dice", "dice_std",
-    "iou_per_image", "iou_per_image_std", "tn", "fp", "fn", "tp",
+    "framework", "run", "loss", "fold", "test_samples", "threshold_source",
+    "threshold", "accuracy", "precision", "recall", "f1", "iou", "dice",
+    "dice_std", "iou_per_image", "iou_per_image_std", "tn", "fp", "fn", "tp",
     "test_loss", "best_epoch",
     "epochs_trained", "w_background", "w_zona",
 ]
@@ -1675,7 +1656,8 @@ class RunResult:
     test_metrics: list
     val_threshold: float = None
     threshold_table: pd.DataFrame = None
-    held_out_sample: int = None
+    fold: int = None
+    test_samples: str = ""
     per_image: pd.DataFrame = None
 
 
@@ -1748,7 +1730,7 @@ def save_time_summary(results, path):
 
 
 def run_experiment(loss, dataset, split, cfg, backend, name=None,
-                   held_out_sample=None, keep_model=True):
+                   fold=None, keep_model=True):
     """Train one model from scratch and evaluate it on the test split.
 
     Every run starts from a fresh session seeded with `cfg.seed`, so the
@@ -1815,16 +1797,18 @@ def run_experiment(loss, dataset, split, cfg, backend, name=None,
     per_image = per_image_table(test, test_prob, thresholds)
     per_image.insert(0, "run", name)
     per_image.insert(1, "loss", loss)
+    per_image.insert(2, "fold", fold)
     per_image_path = output_dir / "per_image" / f"{name}.csv"
     per_image_path.parent.mkdir(parents=True, exist_ok=True)
     per_image.to_csv(per_image_path, index=False)
+    test_samples = " ".join(str(s) for s in np.unique(test.samples))
     return RunResult(
         framework=backend.name, name=name, loss=loss, model=model if keep_model else None,
         model_path=model_path,
         history=history, best_epoch=best_epoch, class_weights=class_weights,
         test_scores=test_scores, test_metrics=test_metrics,
         val_threshold=val_threshold, threshold_table=threshold_table,
-        held_out_sample=held_out_sample, per_image=per_image,
+        fold=fold, test_samples=test_samples, per_image=per_image,
     )
 
 
@@ -1840,7 +1824,8 @@ def results_table(results):
                 "framework": result.framework,
                 "run": result.name,
                 "loss": result.loss,
-                "held_out_sample": result.held_out_sample,
+                "fold": result.fold,
+                "test_samples": result.test_samples,
                 "test_loss": result.test_scores["loss"],
                 "best_epoch": result.best_epoch,
                 "epochs_trained": len(result.history["loss"]),
@@ -1874,32 +1859,39 @@ def run_comparison(dataset, split, cfg, backend):
     return results, table
 
 
-def run_leave_one_embryo_out(dataset, cfg, backend):
-    """Train on one video, test on the other (robustness check only)."""
-    folds = leave_one_embryo_out_splits(
-        dataset.samples, cfg.split.val_size, cfg.seed
+def run_cross_validation(dataset, cfg, backend):
+    """k-fold cross-validation by embryo: every embryo is tested once.
+
+    A robustness check next to the main split, whose test metrics depend
+    on which embryos were drawn for testing.
+    """
+    folds = cross_validation_splits(
+        dataset.samples, cfg.cross_validation.folds, cfg.split.val_size,
+        cfg.seed, cfg.split.group_by_sample,
     )
     output_dir = Path(cfg.output_dir)
     results = []
-    for held_out, split in folds.items():
-        save_split(dataset, split,
-                   output_dir / "splits" / f"loeo_test_sample{held_out}.csv")
-        for loss in cfg.leave_one_embryo_out.runs:
+    for fold, split in folds.items():
+        save_split(dataset, split, output_dir / "splits" / f"cv_fold{fold}.csv")
+        for loss in cfg.cross_validation.runs:
             results.append(run_experiment(
                 loss, dataset, split, cfg, backend,
-                name=f"loeo_test_sample{held_out}_{loss}",
-                held_out_sample=held_out, keep_model=False,
+                name=f"cv_fold{fold}_{loss}", fold=fold, keep_model=False,
             ))
-    table = save_results(results, output_dir / "leave_one_embryo_out.csv")
+    table = save_results(results, output_dir / "cross_validation.csv")
+    summarize_cross_validation(table).to_csv(
+        output_dir / "cross_validation_summary.csv", index=False)
+    save_time_summary(results, output_dir / "cross_validation_by_time.csv")
     return results, table
 
 
-def summarize_leave_one_embryo_out(table):
-    """Mean and std over the held-out videos, per loss and threshold."""
+def summarize_cross_validation(table):
+    """Mean and standard deviation over the folds, per loss and threshold."""
     metrics = ["accuracy", "precision", "recall", "f1", "iou", "dice"]
-    return table.groupby(["loss", "threshold_source"])[metrics].agg(
-        ["mean", "std"]
-    )
+    summary = table.groupby(["loss", "threshold_source"])[metrics].agg(
+        ["mean", "std"])
+    summary.columns = [f"{metric}_{stat}" for metric, stat in summary.columns]
+    return summary.reset_index()
 
 # %% Notebook cell 24
 # Unweighted baseline: binary cross-entropy (as in the thesis)
@@ -2240,9 +2232,10 @@ plot_distance_transform_overlay(test_img, ground_truth, prediction, alpha=0.3,
 # ==== Leave-one-embryo-out (robustness check)
 
 # %% Notebook cell 47
-if RUN_LEAVE_ONE_EMBRYO_OUT:
-    loeo_results, loeo_table = run_leave_one_embryo_out(dataset, cfg, backend)
-    print(loeo_table[['run', 'held_out_sample', 'threshold_source', 'threshold', 'accuracy',
-                      'precision', 'recall', 'f1', 'iou', 'dice']].to_string())
-    loeo_summary = summarize_leave_one_embryo_out(loeo_table)
-    print(loeo_summary.to_string())
+if RUN_CROSS_VALIDATION:
+    cv_results, cv_table = run_cross_validation(dataset, cfg, backend)
+    print(cv_table[['run', 'fold', 'test_samples', 'threshold_source', 'threshold', 'accuracy',
+                    'precision', 'recall', 'f1', 'iou', 'dice']].to_string())
+    print(summarize_cross_validation(cv_table).round(4).to_string(index=False))
+    # Per time point, over all embryos (each tested once)
+    print(pd.read_csv(OUTPUT_DIR + '/cross_validation_by_time.csv').round(4).to_string(index=False))

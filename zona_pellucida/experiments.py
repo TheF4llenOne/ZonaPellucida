@@ -1,4 +1,4 @@
-"""Unweighted vs weighted runs and the leave-one-embryo-out check.
+"""Unweighted vs weighted runs and the cross-validation by embryo.
 
 Framework-neutral: the model is built, trained, saved and applied by a
 `backend` (PyTorch Lightning or Keras, see zona_pellucida/backends).
@@ -16,7 +16,7 @@ import pandas as pd
 from zona_pellucida.config import save_config
 from zona_pellucida.data.class_balance import compute_class_weights
 from zona_pellucida.data.splitting import (
-    leave_one_embryo_out_splits,
+    cross_validation_splits,
     save_split,
 )
 from zona_pellucida.evaluation.metrics import (
@@ -39,9 +39,9 @@ from zona_pellucida.reproducibility import (
 logger = logging.getLogger(__name__)
 
 RESULT_COLUMNS = [
-    "framework", "run", "loss", "held_out_sample", "threshold_source", "threshold",
-    "accuracy", "precision", "recall", "f1", "iou", "dice", "dice_std",
-    "iou_per_image", "iou_per_image_std", "tn", "fp", "fn", "tp",
+    "framework", "run", "loss", "fold", "test_samples", "threshold_source",
+    "threshold", "accuracy", "precision", "recall", "f1", "iou", "dice",
+    "dice_std", "iou_per_image", "iou_per_image_std", "tn", "fp", "fn", "tp",
     "test_loss", "best_epoch",
     "epochs_trained", "w_background", "w_zona",
 ]
@@ -61,7 +61,8 @@ class RunResult:
     test_metrics: list
     val_threshold: float = None
     threshold_table: pd.DataFrame = None
-    held_out_sample: int = None
+    fold: int = None
+    test_samples: str = ""
     per_image: pd.DataFrame = None
 
 
@@ -134,7 +135,7 @@ def save_time_summary(results, path):
 
 
 def run_experiment(loss, dataset, split, cfg, backend, name=None,
-                   held_out_sample=None, keep_model=True):
+                   fold=None, keep_model=True):
     """Train one model from scratch and evaluate it on the test split.
 
     Every run starts from a fresh session seeded with `cfg.seed`, so the
@@ -201,16 +202,18 @@ def run_experiment(loss, dataset, split, cfg, backend, name=None,
     per_image = per_image_table(test, test_prob, thresholds)
     per_image.insert(0, "run", name)
     per_image.insert(1, "loss", loss)
+    per_image.insert(2, "fold", fold)
     per_image_path = output_dir / "per_image" / f"{name}.csv"
     per_image_path.parent.mkdir(parents=True, exist_ok=True)
     per_image.to_csv(per_image_path, index=False)
+    test_samples = " ".join(str(s) for s in np.unique(test.samples))
     return RunResult(
         framework=backend.name, name=name, loss=loss, model=model if keep_model else None,
         model_path=model_path,
         history=history, best_epoch=best_epoch, class_weights=class_weights,
         test_scores=test_scores, test_metrics=test_metrics,
         val_threshold=val_threshold, threshold_table=threshold_table,
-        held_out_sample=held_out_sample, per_image=per_image,
+        fold=fold, test_samples=test_samples, per_image=per_image,
     )
 
 
@@ -226,7 +229,8 @@ def results_table(results):
                 "framework": result.framework,
                 "run": result.name,
                 "loss": result.loss,
-                "held_out_sample": result.held_out_sample,
+                "fold": result.fold,
+                "test_samples": result.test_samples,
                 "test_loss": result.test_scores["loss"],
                 "best_epoch": result.best_epoch,
                 "epochs_trained": len(result.history["loss"]),
@@ -260,29 +264,36 @@ def run_comparison(dataset, split, cfg, backend):
     return results, table
 
 
-def run_leave_one_embryo_out(dataset, cfg, backend):
-    """Train on one video, test on the other (robustness check only)."""
-    folds = leave_one_embryo_out_splits(
-        dataset.samples, cfg.split.val_size, cfg.seed
+def run_cross_validation(dataset, cfg, backend):
+    """k-fold cross-validation by embryo: every embryo is tested once.
+
+    A robustness check next to the main split, whose test metrics depend
+    on which embryos were drawn for testing.
+    """
+    folds = cross_validation_splits(
+        dataset.samples, cfg.cross_validation.folds, cfg.split.val_size,
+        cfg.seed, cfg.split.group_by_sample,
     )
     output_dir = Path(cfg.output_dir)
     results = []
-    for held_out, split in folds.items():
-        save_split(dataset, split,
-                   output_dir / "splits" / f"loeo_test_sample{held_out}.csv")
-        for loss in cfg.leave_one_embryo_out.runs:
+    for fold, split in folds.items():
+        save_split(dataset, split, output_dir / "splits" / f"cv_fold{fold}.csv")
+        for loss in cfg.cross_validation.runs:
             results.append(run_experiment(
                 loss, dataset, split, cfg, backend,
-                name=f"loeo_test_sample{held_out}_{loss}",
-                held_out_sample=held_out, keep_model=False,
+                name=f"cv_fold{fold}_{loss}", fold=fold, keep_model=False,
             ))
-    table = save_results(results, output_dir / "leave_one_embryo_out.csv")
+    table = save_results(results, output_dir / "cross_validation.csv")
+    summarize_cross_validation(table).to_csv(
+        output_dir / "cross_validation_summary.csv", index=False)
+    save_time_summary(results, output_dir / "cross_validation_by_time.csv")
     return results, table
 
 
-def summarize_leave_one_embryo_out(table):
-    """Mean and std over the held-out videos, per loss and threshold."""
+def summarize_cross_validation(table):
+    """Mean and standard deviation over the folds, per loss and threshold."""
     metrics = ["accuracy", "precision", "recall", "f1", "iou", "dice"]
-    return table.groupby(["loss", "threshold_source"])[metrics].agg(
-        ["mean", "std"]
-    )
+    summary = table.groupby(["loss", "threshold_source"])[metrics].agg(
+        ["mean", "std"])
+    summary.columns = [f"{metric}_{stat}" for metric, stat in summary.columns]
+    return summary.reset_index()

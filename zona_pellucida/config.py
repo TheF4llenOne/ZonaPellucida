@@ -92,8 +92,9 @@ class ExperimentsConfig:
 
 
 @dataclass
-class LeaveOneEmbryoOutConfig:
+class CrossValidationConfig:
     enabled: bool = True
+    folds: int = 5
     runs: list = field(default_factory=lambda: ["unweighted", "weighted"])
 
 
@@ -112,8 +113,8 @@ class Config:
     )
     evaluation: EvaluationConfig = field(default_factory=EvaluationConfig)
     experiments: ExperimentsConfig = field(default_factory=ExperimentsConfig)
-    leave_one_embryo_out: LeaveOneEmbryoOutConfig = field(
-        default_factory=LeaveOneEmbryoOutConfig
+    cross_validation: CrossValidationConfig = field(
+        default_factory=CrossValidationConfig
     )
 
     def to_dict(self):
@@ -144,13 +145,20 @@ def overlapping_keys(base, overrides, prefix=""):
     return keys
 
 
+# Keys of earlier versions and the keys that replaced them
+RENAMED_KEYS = {"leave_one_embryo_out": "cross_validation"}
+
+
 def _build(cls, values, path="config"):
     """Build dataclass `cls` from a dict, rejecting unknown keys."""
     hints = typing.get_type_hints(cls)
     known = {f.name for f in dataclasses.fields(cls)}
     unknown = set(values) - known
     if unknown:
-        raise KeyError(f"Unknown key(s) in {path}: {sorted(unknown)}")
+        renamed = "".join(
+            f"; {key} was renamed to {RENAMED_KEYS[key]} in version 0.4.0"
+            for key in sorted(unknown) if key in RENAMED_KEYS)
+        raise KeyError(f"Unknown key(s) in {path}: {sorted(unknown)}{renamed}")
     kwargs = {}
     for name, value in values.items():
         hint = hints[name]

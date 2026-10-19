@@ -103,7 +103,12 @@ experiments:
   # Run used for the qualitative figures (predictions, confusion matrix...).
   figure_run: weighted
 
-leave_one_embryo_out:
-  # Robustness check: train on one video, test on the other.
+cross_validation:
+  # Robustness check next to the main split: the embryos are shuffled
+  # (seed) and dealt into `folds` groups; each group is the test set of one
+  # fold, so every embryo is tested once. With folds equal to the number of
+  # embryos this is leave-one-embryo-out (the two videos of the first
+  # thesis version: folds 2 and split.group_by_sample false).
   enabled: true
+  folds: 5
   runs: [unweighted, weighted]
