@@ -448,7 +448,7 @@ os.makedirs(FIG_DIR, exist_ok=True)
 # ==============================================================================
 
 
-# Image and mask names of the G: embryo images: embryo<dish><P>_<hours>h,
+# Image and mask names of the labelled embryo images: embryo<dish><P>_<hours>h,
 # e.g. embryo208_25h.png and embryo208_25h_mask.png. `sample` is the
 # embryo, `frame` the time point in hours.
 IMAGE_PATTERN = r"^embryo(?P<sample>\d+)_(?P<frame>\d+)h\.png$"
@@ -649,10 +649,11 @@ plt.show()
 class Split:
     """Row indices into a SegmentationDataset.
 
-    `train` keeps the random order produced by train_test_split: with
-    shuffle=False this is the (fixed) batch order of every epoch, as in the
-    thesis. Sorting it would give batches of consecutive frames of one
-    video. `val` and `test` are sorted (their order does not matter).
+    `train` is in random order (drawn from the seed): with shuffle=False
+    this is the (fixed) batch order of every epoch, as in the thesis.
+    Sorted indices would give batches of one embryo's images (or of
+    consecutive frames of one video). `val` and `test` are sorted (their
+    order does not matter).
     """
 
     train: np.ndarray
@@ -682,8 +683,10 @@ def _draw_samples(candidates, fraction, rng, purpose):
     count = _count(fraction, len(candidates))
     if count >= len(candidates):
         raise ValueError(
-            f"{len(candidates)} embryos are too few to take {fraction:.0%} "
-            f"of them for {purpose} and keep some for training")
+            f"{len(candidates)} embryo(s) are too few to take "
+            f"{fraction:.0%} of them for {purpose} and keep at least one "
+            "for training; with very few embryos (e.g. the two videos of "
+            "the first thesis version) set split.group_by_sample: false")
     return np.sort(rng.choice(candidates, size=count, replace=False))
 
 

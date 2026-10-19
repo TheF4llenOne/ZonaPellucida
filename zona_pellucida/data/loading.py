@@ -11,7 +11,7 @@ from PIL import Image
 
 logger = logging.getLogger(__name__)
 
-# Image and mask names of the G: embryo images: embryo<dish><P>_<hours>h,
+# Image and mask names of the labelled embryo images: embryo<dish><P>_<hours>h,
 # e.g. embryo208_25h.png and embryo208_25h_mask.png. `sample` is the
 # embryo, `frame` the time point in hours.
 IMAGE_PATTERN = r"^embryo(?P<sample>\d+)_(?P<frame>\d+)h\.png$"

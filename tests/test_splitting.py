@@ -67,7 +67,7 @@ def test_save_and_load_split(synthetic_dirs, tmp_path):
                                       getattr(split, name))
 
 
-# The G: data: 30 embryos at 25, 69 and 117 h, one 117 h image left out
+# The embryo data: 30 embryos at 25, 69 and 117 h, one 117 h image left out
 EMBRYOS = np.array([e for e in range(101, 131) for _ in range(3)][:-1])
 
 

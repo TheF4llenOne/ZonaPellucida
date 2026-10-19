@@ -74,11 +74,11 @@ Tests of a framework that is not installed are skipped. After changing the noteb
 
 ### Results
 
-`fcn.ipynb` writes the test-set metrics of both models (unweighted and weighted loss; accuracy, precision, recall, F1, IoU, Dice, at the 0.5 and the validation-selected threshold) to `results_comparison.csv`, the scores per time point to `results_by_time.csv`, the cross-validation numbers to `cross_validation.csv` (summary: `cross_validation_summary.csv`, per time point: `cross_validation_by_time.csv`), and the figures to `figures/`. Accuracy, precision, recall, F1 and IoU are pooled over all test pixels (F1 = pooled Dice); `dice` is the mean of the per-image Dice scores (the thesis' "Average Dice") and `iou_per_image` its IoU counterpart. The training curves and the validation-threshold search use the pooled Dice. The thesis reports the Keras results (Chapter 5).
+`fcn.ipynb` writes the test-set metrics of both models (unweighted and weighted loss; accuracy, precision, recall, F1, IoU, Dice, at the 0.5 and the validation-selected threshold) to `results_comparison.csv`, the scores per time point to `results_by_time.csv`, the cross-validation numbers to `cross_validation.csv` (summary: `cross_validation_summary.csv`, per time point: `cross_validation_by_time.csv`), and the figures to `figures/`. Accuracy, precision, recall, F1 and IoU are pooled over all test pixels (F1 = pooled Dice); `dice` is the mean of the per-image Dice scores (the thesis' "Average Dice") and `iou_per_image` its IoU counterpart. The training curves and the validation-threshold search use the pooled Dice. The thesis reports the Keras results (Chapter 5). In `cross_validation_summary.csv` the `_std` columns are the sample standard deviation of the five fold values; `dice_std`, `iou_per_image_std` and the `_std` columns of the by-time tables are the population standard deviation over the test images.
 
 ### Data
 
-The first thesis version used 205 frames of two time-lapse videos (105 and 100 frames of two embryos). Consecutive frames are nearly identical, so a frame-level split put near-duplicates of the test frames into the training set, and the model overfitted to the two embryos. The current dataset has 89 labelled images of 30 embryos from three culture dishes, each embryo imaged at 25, 69 and 117 hours after insemination (one 117 h image left out: the embryo is mostly outside the picture), and the split and the cross-validation are by embryo. A further dish (dish 3, 8 embryos) is not used yet: only the outer edge of its zona pellucida was traced.
+The first thesis version used 205 frames of two time-lapse videos (105 and 100 frames of two embryos). Consecutive frames are nearly identical, so a frame-level split put near-duplicates of the test frames into the training set, and the model overfitted to the two embryos. The current dataset has 89 labelled images of 30 embryos from three culture dishes, each embryo imaged at 25, 69 and 117 hours after insemination (one 117 h image left out: the embryo is mostly outside the picture), and the split and the cross-validation are by embryo. A further dish (dish 3, 8 embryos) is not used yet: only the outer edge of its zona pellucida was traced. The embryos of one dish share culture and imaging conditions, and the split and the cross-validation are by embryo, not by dish, so the test embryos come from dishes that are also in the training set.
 
 To rerun the first version on the 205 video frames, set `data.image_pattern: '^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$'`, `data.mask_pattern: '^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$'`, `split.group_by_sample: false` and `cross_validation.folds: 2` (leave-one-embryo-out with the splits of version 0.3.0).
 
@@ -89,9 +89,9 @@ To rerun the first version on the 205 video frames, set `data.image_pattern: '^s
 - Model Improvements: Exploring advanced architectures like DeepLab for improved performance.
 - Data Augmentation: Implementing advanced augmentation techniques to increase dataset variability.
 - Regularization: L2 weight decay and stronger augmentation (the model already uses dropout).
-- Cross-Validation: 5-fold cross-validation by embryo is included; a split by culture dish would also test generalisation to new patients.
+- Cross-Validation: 5-fold cross-validation by embryo is included; a split by culture dish would also test generalisation to new culture dishes.
 
-### Dataset
+### Data availability
 
 The dataset used for training and evaluation consists of time-lapse images of human embryos, with manual annotations for the zona pellucida. Due to privacy and ethical considerations, the dataset cannot be shared publicly. However, instructions for replicating the dataset preparation process can be provided upon request.
 

@@ -13,14 +13,14 @@ def ring_mask(height, width, center, r_inner, r_outer):
     return (dist >= r_inner) & (dist <= r_outer)
 
 
-# File names of the G: embryo images (default) and of the video frames of
+# File names of the labelled embryo images (default) and of the video frames of
 # the first thesis version; {sample} is the embryo or video, {frame} the
 # time point in hours or the frame number.
 EMBRYO_NAMES = ("embryo{sample}_{frame}h.png",
                 "embryo{sample}_{frame}h_mask.png")
 VIDEO_NAMES = ("sample{sample}_frame_{frame}.png",
                "sample{sample}_mask_frame_{frame}.png")
-# 10 embryos (dish 1, P01-P10) at the three time points of the G: data
+# 10 embryos (dish 1, P01-P10) at the three time points of the embryo data
 DEFAULT_FRAMES = {sample: (25, 69, 117) for sample in range(101, 111)}
 
 
