@@ -12,7 +12,7 @@ Semantic segmentation of the zona pellucida in time-lapse images of human embryo
 ### Model
 
 - Input: 512x512 grayscale image. Output: one zona pellucida probability per pixel (the PyTorch model outputs logits, with the sigmoid inside the loss).
-- Contracting path of five blocks of two 3x3 convolutions (32 to 512 filters, ReLU, batch normalisation, max pooling); expanding path of four 2x2 transposed convolutions with skip connections; dropout 0.5; 1x1 output convolution.
+- Contracting path of five blocks of two 3x3 convolutions (32 to 512 filters, ReLU, batch normalisation with momentum 0.9 in the Keras convention, i.e. 0.1 in PyTorch's, max pooling); expanding path of four 2x2 transposed convolutions with skip connections; dropout 0.5; 1x1 output convolution.
 - Loss: binary cross-entropy (baseline) or frequency-weighted binary cross-entropy. Adam (learning rate 0.001), batch size 16, 100 epochs; the weights of the epoch with the best validation IoU are kept (optional early stopping in the config).
 
 ### Code structure
@@ -80,7 +80,7 @@ Tests of a framework that is not installed are skipped. After changing the noteb
 
 The first thesis version used 205 frames of two time-lapse videos (105 and 100 frames of two embryos). Consecutive frames are nearly identical, so a frame-level split put near-duplicates of the test frames into the training set, and the model overfitted to the two embryos. The current dataset has 89 labelled images of 30 embryos from three culture dishes, each embryo imaged at 25, 69 and 117 hours after insemination (one 117 h image left out: the embryo is mostly outside the picture), and the split and the cross-validation are by embryo. A further dish (dish 3, 8 embryos) is not used yet: only the outer edge of its zona pellucida was traced. The embryos of one dish share culture and imaging conditions, and the split and the cross-validation are by embryo, not by dish, so the test embryos come from dishes that are also in the training set.
 
-To rerun the first version on the 205 video frames, set `data.image_pattern: '^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$'`, `data.mask_pattern: '^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$'`, `split.group_by_sample: false` and `cross_validation.folds: 2` (leave-one-embryo-out with the splits of version 0.3.0).
+To rerun the first version on the 205 video frames, set `data.image_pattern: '^sample(?P<sample>\d+)_frame_(?P<frame>\d+)\.png$'`, `data.mask_pattern: '^sample(?P<sample>\d+)_mask_frame_(?P<frame>\d+)\.png$'`, `split.group_by_sample: false` and `cross_validation.folds: 2` (leave-one-embryo-out with the splits of version 0.3.0). The model then uses batch-normalisation momentum 0.9, not the Keras default 0.99 of the thesis (`CHANGELOG.md`, 0.4.1).
 
 ### Future Work
 
