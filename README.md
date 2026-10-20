@@ -63,7 +63,7 @@ uv pip install --python .venv --reinstall torch --index-url https://download.pyt
 uv run python -c "import torch; print(torch.cuda.is_available())"   # True
 ```
 
-Outputs (in `<output_dir>/<framework>`): `config_used.yaml`, `environment.yaml` (with `models/<run>.{config,environment}.yaml` per model), `split.csv`, `splits/cv_fold*.csv`, `class_balance.{png,csv}`, `class_balance_per_image.csv`, `results_comparison.csv`, `results_by_time.csv`, `per_image/<run>.csv`, `cross_validation.csv`, `cross_validation_summary.csv`, `cross_validation_by_time.csv`, `models/<run>.ckpt` (PyTorch) or `models/<run>.keras`, `histories/*.{pkl,csv}`, `thresholds/*.csv`, `logs/` (TensorBoard). The notebook also writes the thesis figures to `figures/` (`fig5_*.png` are named after the figures of Chapter 5).
+Outputs (in `<output_dir>/<framework>`): `config_used.yaml`, `environment.yaml` (with `models/<run>.{config,environment}.yaml` per model), `split.csv`, `splits/cv_fold*.csv`, `class_balance.{png,csv}`, `class_balance_per_image.csv`, `results_comparison.csv`, `results_by_time.csv`, `per_image/<run>.csv`, `cross_validation.csv`, `cross_validation_summary.csv`, `cross_validation_by_time.csv`, `cross_validation/fold*.csv` (one per fold; the three cross-validation files are rebuilt from them), `models/<run>.ckpt` (PyTorch) or `models/<run>.keras`, `histories/*.{pkl,csv}`, `thresholds/*.csv`, `logs/` (TensorBoard). The notebook also writes the thesis figures to `figures/` (`fig5_*.png` are named after the figures of Chapter 5).
 
 ### Reproducibility
 

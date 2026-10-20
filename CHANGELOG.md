@@ -2,7 +2,7 @@
 
 ## 0.4.2
 
-- **Cross-validation folds in separate processes.** `run_cross_validation(..., folds=[k])` and `python -m zona_pellucida.bin.run_experiments --cv-fold k --config <output_dir>/<framework>/config_used.yaml` run only fold k. Each fold's results are saved in `cross_validation/fold<k>.csv`, and `cross_validation.csv`, `cross_validation_summary.csv` and `cross_validation_by_time.csv` are rebuilt from every fold saved so far; one fold per process gives byte-identical files to one run of all folds (tested). Reason: on a Kaggle T4 (16 GB) Keras needs about 11 GB per training at 512x512, but in one process the third training ran out of GPU memory (fragmentation), so the 5-fold cross-validation (10 trainings) never finished. No result changes.
+- **Cross-validation folds in separate processes.** `run_cross_validation(..., folds=[k])` and `python -m zona_pellucida.bin.run_experiments --cv-fold k --config <output_dir>/<framework>/config_used.yaml` run only fold k. Each fold's results are saved in `cross_validation/fold<k>.csv`, and `cross_validation.csv`, `cross_validation_summary.csv` and `cross_validation_by_time.csv` are rebuilt from every fold saved so far; one fold per process gives byte-identical files to one run of all folds (tested with the folds run one call at a time, and with one process per fold). Reason: on a Kaggle T4 (16 GB) Keras needs about 11 GB per training at 512x512, but in one process the third training ran out of GPU memory (fragmentation), so the 5-fold cross-validation (10 trainings) never finished. No result changes.
 
 ## 0.4.1
 

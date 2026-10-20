@@ -16,7 +16,10 @@ from zona_pellucida.experiments import (
     per_image_table,
     run_comparison,
     run_cross_validation,
+    save_results,
+    save_time_summary,
     summarize_by_time,
+    summarize_cross_validation,
 )
 
 
@@ -117,7 +120,16 @@ def test_cross_validation_in_parts_matches_one_run(small_cfg, backend):
     small_cfg.cross_validation.folds = 3
     outputs = Path(small_cfg.output_dir)
     small_cfg.output_dir = str(outputs / "whole")
-    run_cross_validation(dataset, small_cfg, backend)
+    whole_results, _ = run_cross_validation(dataset, small_cfg, backend)
+    # The merged files are those written straight from the results (0.4.1)
+    direct = outputs / "direct"
+    table = save_results(whole_results, direct / CV_FILES[0])
+    summarize_cross_validation(table).to_csv(direct / CV_FILES[1],
+                                             index=False)
+    save_time_summary(whole_results, direct / CV_FILES[2])
+    for name in CV_FILES:
+        assert ((outputs / "whole" / name).read_bytes()
+                == (direct / name).read_bytes()), name
 
     small_cfg.output_dir = str(outputs / "parts")
     results, table = run_cross_validation(dataset, small_cfg, backend,
