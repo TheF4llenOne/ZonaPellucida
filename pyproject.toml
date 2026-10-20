@@ -1,6 +1,6 @@
 [project]
 name = "zona-pellucida"
-version = "0.4.1"
+version = "0.4.2"
 description = "FCN (U-Net-style) segmentation of the zona pellucida in embryo images, in PyTorch Lightning and TensorFlow/Keras"
 readme = "README.md"
 requires-python = ">=3.10"

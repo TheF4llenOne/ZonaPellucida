@@ -48,6 +48,14 @@ uv sync --python 3.12 --extra pytorch     # or --extra keras (or both)
 uv run python -m zona_pellucida.bin.run_experiments --config my_config.yaml
 ```
 
+Keras at 512x512 needs about 11 GB of GPU memory per training, and on a 16 GB GPU (Kaggle T4) its third training in one process ran out of memory (its second with TensorFlow's default allocator); the cross-validation adds ten trainings. It can therefore also run one fold per process, with the config saved by the main run; this gives the same files as one run of all folds:
+
+```
+uv run python -m zona_pellucida.bin.run_experiments --cv-fold 1 --config outputs/keras/config_used.yaml
+```
+
+(repeat for folds 2 to 5; `--cv-fold` skips the main runs and rebuilds the cross-validation summaries from the folds saved so far).
+
 On Windows, PyPI only has CPU builds of PyTorch. For an NVIDIA GPU, replace it after `uv sync` (a later `uv sync` switches back to the CPU build):
 
 ```
@@ -55,7 +63,7 @@ uv pip install --python .venv --reinstall torch --index-url https://download.pyt
 uv run python -c "import torch; print(torch.cuda.is_available())"   # True
 ```
 
-Outputs (in `<output_dir>/<framework>`): `config_used.yaml`, `environment.yaml` (with `models/<run>.{config,environment}.yaml` per model), `split.csv`, `splits/cv_fold*.csv`, `class_balance.{png,csv}`, `class_balance_per_image.csv`, `results_comparison.csv`, `results_by_time.csv`, `per_image/<run>.csv`, `cross_validation.csv`, `cross_validation_summary.csv`, `cross_validation_by_time.csv`, `models/<run>.ckpt` (PyTorch) or `models/<run>.keras`, `histories/*.{pkl,csv}`, `thresholds/*.csv`, `logs/` (TensorBoard). The notebook also writes the thesis figures to `figures/` (`fig5_*.png` are named after the figures of Chapter 5).
+Outputs (in `<output_dir>/<framework>`): `config_used.yaml`, `environment.yaml` (with `models/<run>.{config,environment}.yaml` per model), `split.csv`, `splits/cv_fold*.csv`, `class_balance.{png,csv}`, `class_balance_per_image.csv`, `results_comparison.csv`, `results_by_time.csv`, `per_image/<run>.csv`, `cross_validation.csv`, `cross_validation_summary.csv`, `cross_validation_by_time.csv`, `cross_validation/fold*.csv` (one per fold; the three cross-validation files are rebuilt from them), `models/<run>.ckpt` (PyTorch) or `models/<run>.keras`, `histories/*.{pkl,csv}`, `thresholds/*.csv`, `logs/` (TensorBoard). The notebook also writes the thesis figures to `figures/` (`fig5_*.png` are named after the figures of Chapter 5).
 
 ### Reproducibility
 

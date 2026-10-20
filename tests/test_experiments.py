@@ -16,7 +16,10 @@ from zona_pellucida.experiments import (
     per_image_table,
     run_comparison,
     run_cross_validation,
+    save_results,
+    save_time_summary,
     summarize_by_time,
+    summarize_cross_validation,
 )
 
 
@@ -103,6 +106,52 @@ def test_cross_validation(small_cfg, backend):
         assert (outputs / name).exists(), name
     summary = pd.read_csv(outputs / "cross_validation_summary.csv")
     assert {"dice_mean", "dice_std"} <= set(summary.columns)
+
+
+CV_FILES = ("cross_validation.csv", "cross_validation_summary.csv",
+            "cross_validation_by_time.csv")
+
+
+@pytest.mark.slow
+def test_cross_validation_in_parts_matches_one_run(small_cfg, backend):
+    """Folds run one call (or process) at a time give the same files."""
+    dataset = load_dataset_from_config(small_cfg.data)
+    small_cfg.cross_validation.runs = ["unweighted"]
+    small_cfg.cross_validation.folds = 3
+    outputs = Path(small_cfg.output_dir)
+    small_cfg.output_dir = str(outputs / "whole")
+    whole_results, _ = run_cross_validation(dataset, small_cfg, backend)
+    # The merged files are those written straight from the results (0.4.1)
+    direct = outputs / "direct"
+    table = save_results(whole_results, direct / CV_FILES[0])
+    summarize_cross_validation(table).to_csv(direct / CV_FILES[1],
+                                             index=False)
+    save_time_summary(whole_results, direct / CV_FILES[2])
+    for name in CV_FILES:
+        assert ((outputs / "whole" / name).read_bytes()
+                == (direct / name).read_bytes()), name
+
+    small_cfg.output_dir = str(outputs / "parts")
+    results, table = run_cross_validation(dataset, small_cfg, backend,
+                                          folds=[2])
+    assert [r.fold for r in results] == [2]
+    assert table["fold"].unique().tolist() == [2]  # the folds saved so far
+    results, table = run_cross_validation(dataset, small_cfg, backend,
+                                          folds=[3, 1])
+    assert [r.fold for r in results] == [1, 3]
+    assert table["fold"].unique().tolist() == [1, 2, 3]
+    for name in CV_FILES:
+        assert ((outputs / "parts" / name).read_bytes()
+                == (outputs / "whole" / name).read_bytes()), name
+
+
+def test_cross_validation_rejects_unknown_folds(small_cfg):
+    dataset = load_dataset_from_config(small_cfg.data)
+    # Checked before anything is trained: no backend is needed
+    with pytest.raises(ValueError, match="fold"):
+        run_cross_validation(dataset, small_cfg, None, folds=[0])
+    with pytest.raises(ValueError, match="fold"):
+        run_cross_validation(dataset, small_cfg, None, folds=[6])
 
 
 def test_results_table_reports_the_loss_weights_used():
