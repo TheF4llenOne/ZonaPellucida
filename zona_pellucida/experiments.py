@@ -264,30 +264,79 @@ def run_comparison(dataset, split, cfg, backend):
     return results, table
 
 
-def run_cross_validation(dataset, cfg, backend):
+def run_cross_validation(dataset, cfg, backend, folds=None):
     """k-fold cross-validation by embryo: every embryo is tested once.
 
     A robustness check next to the main split, whose test metrics depend
     on which embryos were drawn for testing.
+
+    `folds` (fold numbers, from 1) runs only those folds. Each fold's
+    results are saved in cross_validation/fold<k>.csv and the summaries
+    are rebuilt from every fold saved so far, so the folds can run in
+    separate processes (e.g. Keras on a 16 GB GPU, which runs out of
+    memory after a few trainings in one process) and give the same files
+    as one run of all folds. Returns the results of the folds run here
+    and the table of all folds saved so far.
     """
-    folds = cross_validation_splits(
+    splits = cross_validation_splits(
         dataset.samples, cfg.cross_validation.folds, cfg.split.val_size,
         cfg.seed, cfg.split.group_by_sample,
     )
+    selected = sorted(splits) if folds is None else sorted(set(folds))
+    unknown = [fold for fold in selected if fold not in splits]
+    if unknown:
+        raise ValueError(f"No cross-validation fold {unknown}: the folds "
+                         f"are {sorted(splits)}")
     output_dir = Path(cfg.output_dir)
     results = []
-    for fold, split in folds.items():
+    for fold in selected:
+        split = splits[fold]
         save_split(dataset, split, output_dir / "splits" / f"cv_fold{fold}.csv")
-        for loss in cfg.cross_validation.runs:
-            results.append(run_experiment(
-                loss, dataset, split, cfg, backend,
-                name=f"cv_fold{fold}_{loss}", fold=fold, keep_model=False,
-            ))
-    table = save_results(results, output_dir / "cross_validation.csv")
+        fold_results = [
+            run_experiment(loss, dataset, split, cfg, backend,
+                           name=f"cv_fold{fold}_{loss}", fold=fold,
+                           keep_model=False)
+            for loss in cfg.cross_validation.runs
+        ]
+        save_results(fold_results,
+                     output_dir / "cross_validation" / f"fold{fold}.csv")
+        results += fold_results
+    table = merge_cross_validation(output_dir, cfg.cross_validation.folds)
+    return results, table
+
+
+def merge_cross_validation(output_dir, folds):
+    """Write cross_validation.csv, cross_validation_summary.csv and
+    cross_validation_by_time.csv from the folds saved so far (of `folds`).
+
+    The tables are read back exactly (round-trip floats), in fold order,
+    so the files are identical to those of one run of all folds.
+    """
+    output_dir = Path(output_dir)
+    fold_files = {fold: output_dir / "cross_validation" / f"fold{fold}.csv"
+                  for fold in range(1, folds + 1)}
+    saved = [fold for fold, path in fold_files.items() if path.exists()]
+    if not saved:
+        raise ValueError(f"No cross-validation fold saved in {output_dir}")
+    missing = [fold for fold in fold_files if fold not in saved]
+    if missing:
+        logger.info("Cross-validation: folds %s of %d saved, %s still to run",
+                    saved, folds, missing)
+    table = pd.concat(
+        [pd.read_csv(fold_files[fold], float_precision="round_trip")
+         for fold in saved], ignore_index=True)
+    table.to_csv(output_dir / "cross_validation.csv", index=False)
+    logger.info("Saved results to %s", output_dir / "cross_validation.csv")
     summarize_cross_validation(table).to_csv(
         output_dir / "cross_validation_summary.csv", index=False)
-    save_time_summary(results, output_dir / "cross_validation_by_time.csv")
-    return results, table
+    per_image = pd.concat(
+        [pd.read_csv(output_dir / "per_image" / f"{run}.csv",
+                     float_precision="round_trip")
+         for run in table["run"].unique()], ignore_index=True)
+    path = output_dir / "cross_validation_by_time.csv"
+    summarize_by_time(per_image).to_csv(path, index=False)
+    logger.info("Saved the scores per time point to %s", path)
+    return table
 
 
 def summarize_cross_validation(table):

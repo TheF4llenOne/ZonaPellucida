@@ -105,6 +105,43 @@ def test_cross_validation(small_cfg, backend):
     assert {"dice_mean", "dice_std"} <= set(summary.columns)
 
 
+CV_FILES = ("cross_validation.csv", "cross_validation_summary.csv",
+            "cross_validation_by_time.csv")
+
+
+@pytest.mark.slow
+def test_cross_validation_in_parts_matches_one_run(small_cfg, backend):
+    """Folds run one call (or process) at a time give the same files."""
+    dataset = load_dataset_from_config(small_cfg.data)
+    small_cfg.cross_validation.runs = ["unweighted"]
+    small_cfg.cross_validation.folds = 3
+    outputs = Path(small_cfg.output_dir)
+    small_cfg.output_dir = str(outputs / "whole")
+    run_cross_validation(dataset, small_cfg, backend)
+
+    small_cfg.output_dir = str(outputs / "parts")
+    results, table = run_cross_validation(dataset, small_cfg, backend,
+                                          folds=[2])
+    assert [r.fold for r in results] == [2]
+    assert table["fold"].unique().tolist() == [2]  # the folds saved so far
+    results, table = run_cross_validation(dataset, small_cfg, backend,
+                                          folds=[3, 1])
+    assert [r.fold for r in results] == [1, 3]
+    assert table["fold"].unique().tolist() == [1, 2, 3]
+    for name in CV_FILES:
+        assert ((outputs / "parts" / name).read_bytes()
+                == (outputs / "whole" / name).read_bytes()), name
+
+
+def test_cross_validation_rejects_unknown_folds(small_cfg):
+    dataset = load_dataset_from_config(small_cfg.data)
+    # Checked before anything is trained: no backend is needed
+    with pytest.raises(ValueError, match="fold"):
+        run_cross_validation(dataset, small_cfg, None, folds=[0])
+    with pytest.raises(ValueError, match="fold"):
+        run_cross_validation(dataset, small_cfg, None, folds=[6])
+
+
 def test_results_table_reports_the_loss_weights_used():
     from zona_pellucida.experiments import RunResult, results_table
 
